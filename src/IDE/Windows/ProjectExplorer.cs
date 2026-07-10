@@ -49,13 +49,21 @@ namespace MonoGameMaker.IDE.Windows
             if (!node.IsDirectory)
             {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
-                if (GlobalState.OpenResources.Contains(relativePath))
+                if (GlobalState.SelectedResourcePath == relativePath)
                 {
                     flags |= ImGuiTreeNodeFlags.Selected;
                 }
 
                 ImGui.TreeNodeEx(node.Name, flags);
-                if (ImGui.IsItemClicked())
+                
+                if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                {
+                    GlobalState.SelectedResourcePath = relativePath;
+                }
+
+                string ext = Path.GetExtension(relativePath).ToLower();
+                bool isEditable = ext == ".cs" || ext == ".json";
+                if (isEditable && ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                 {
                     GlobalState.OpenResources.Add(relativePath);
                 }
@@ -63,7 +71,7 @@ namespace MonoGameMaker.IDE.Windows
             else
             {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.None;
-                if (GlobalState.OpenResources.Contains(relativePath))
+                if (GlobalState.SelectedResourcePath == relativePath)
                 {
                     flags |= ImGuiTreeNodeFlags.Selected;
                 }
@@ -74,9 +82,9 @@ namespace MonoGameMaker.IDE.Windows
                 }
 
                 bool opened = ImGui.TreeNodeEx(node.Name, flags);
-                if (ImGui.IsItemClicked())
+                if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 {
-                    GlobalState.OpenResources.Add(relativePath);
+                    GlobalState.SelectedResourcePath = relativePath;
                 }
 
                 if (opened)

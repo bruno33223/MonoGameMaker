@@ -8,6 +8,7 @@ namespace MonoGameMaker.IDE.Core
     {
         public static string? CurrentProjectPath { get; set; }
         public static string? CurrentProjectName { get; set; }
+        public static string? SelectedResourcePath { get; set; }
         public static FileSystemCache? CurrentProjectCache { get; set; }
         public static HashSet<string> OpenResources { get; } = new();
         

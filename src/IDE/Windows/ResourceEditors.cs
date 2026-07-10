@@ -11,7 +11,6 @@ namespace MonoGameMaker.IDE.Windows
 {
     public static class ResourceEditors
     {
-        // Independent states for open windows
         private static readonly Dictionary<string, string> _importPaths = new();
         private static readonly Dictionary<string, TextEditor> _scriptEditors = new();
         private static readonly Dictionary<string, RoomEditorState> _roomStates = new();
@@ -27,9 +26,50 @@ namespace MonoGameMaker.IDE.Windows
             public int InstY = 100;
         }
 
-        public static void DrawAll()
+        public static void DrawPropertiesWindow()
         {
-            // Thread-safe copy iteration
+            ImGui.Begin("Properties");
+
+            if (string.IsNullOrEmpty(GlobalState.CurrentProjectPath))
+            {
+                ImGui.Text("No project loaded.");
+                ImGui.End();
+                return;
+            }
+
+            string? res = GlobalState.SelectedResourcePath;
+            if (string.IsNullOrEmpty(res))
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(0.6f, 0.6f, 0.6f, 1f), "Select a resource in the Project Explorer.");
+                ImGui.End();
+                return;
+            }
+
+            string absolutePath = Path.Combine(GlobalState.CurrentProjectPath, res);
+            bool isDir = Directory.Exists(absolutePath);
+            bool isFile = File.Exists(absolutePath);
+
+            if (!isDir && !isFile)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.3f, 0.3f, 1f), $"Selected path does not exist on disk:\n{res}");
+                ImGui.End();
+                return;
+            }
+
+            if (isDir)
+            {
+                DrawDirectoryProperties(res, absolutePath);
+            }
+            else
+            {
+                DrawFileProperties(res, absolutePath);
+            }
+
+            ImGui.End();
+        }
+
+        public static void DrawDocumentWindows()
+        {
             var resourcesToDraw = GlobalState.OpenResources.ToList();
             
             foreach (var res in resourcesToDraw)
@@ -38,11 +78,10 @@ namespace MonoGameMaker.IDE.Windows
                 if (string.IsNullOrEmpty(fileName)) fileName = res;
 
                 bool isOpen = true;
-                ImGui.Begin($"Inspector: {fileName}##{res}", ref isOpen);
+                ImGui.Begin($"Document: {fileName}##{res}", ref isOpen);
 
                 if (!isOpen)
                 {
-                    // Clean resources on window close
                     string absolutePath = Path.Combine(GlobalState.CurrentProjectPath!, res);
                     TextureCache.Unload(absolutePath);
                     
@@ -61,34 +100,12 @@ namespace MonoGameMaker.IDE.Windows
                     continue;
                 }
 
-                DrawResourceInspector(res);
+                DrawDocumentEditor(res);
                 ImGui.End();
             }
         }
 
-        private static void DrawResourceInspector(string relativePath)
-        {
-            string fullPath = Path.Combine(GlobalState.CurrentProjectPath!, relativePath);
-            bool isDir = Directory.Exists(fullPath);
-            bool isFile = File.Exists(fullPath);
-
-            if (!isDir && !isFile)
-            {
-                ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.3f, 0.3f, 1f), $"Selected path does not exist on disk:\n{relativePath}");
-                return;
-            }
-
-            if (isDir)
-            {
-                DrawDirectoryInspector(relativePath, fullPath);
-            }
-            else
-            {
-                DrawFileInspector(relativePath, fullPath);
-            }
-        }
-
-        private static void DrawDirectoryInspector(string relativePath, string absolutePath)
+        private static void DrawDirectoryProperties(string relativePath, string absolutePath)
         {
             string folderName = Path.GetFileName(relativePath);
             ImGui.TextColored(new System.Numerics.Vector4(0f, 0.6f, 1f, 1f), $"Folder: {folderName}");
@@ -208,11 +225,10 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             }
         }
 
-        private static void DrawFileInspector(string relativePath, string absolutePath)
+        private static void DrawFileProperties(string relativePath, string absolutePath)
         {
             string fileName = Path.GetFileName(relativePath);
 
-            // Texture Previewing
             string ext = Path.GetExtension(relativePath).ToLower();
             bool isImage = ext == ".png" || ext == ".jpg" || ext == ".jpeg";
 
@@ -240,6 +256,9 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 
             ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.8f, 0f, 1f), $"Resource: {fileName}");
             ImGui.Text($"Relative Path: {relativePath}");
+            
+            long size = new FileInfo(absolutePath).Length;
+            ImGui.Text($"File Size: {size / 1024.0:F2} KB");
             ImGui.Separator();
             ImGui.Dummy(new System.Numerics.Vector2(0, 10));
 
@@ -247,22 +266,68 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 relativePath.StartsWith("Content/Backgrounds/") || 
                 relativePath.StartsWith("Content/Sounds/"))
             {
-                long size = new FileInfo(absolutePath).Length;
-                ImGui.Text($"File Size: {size / 1024.0:F2} KB");
-                ImGui.Dummy(new System.Numerics.Vector2(0, 10));
-
                 if (ImGui.Button("Delete Asset From Project", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
                     TextureCache.Unload(absolutePath);
                     bool success = AssetPipelineSynchronizer.UnregisterAsset(GlobalState.CurrentProjectPath!, relativePath, GlobalState.Log);
                     if (success)
                     {
+                        GlobalState.SelectedResourcePath = null;
                         GlobalState.OpenResources.Remove(relativePath);
                         GlobalState.Log($"Asset {fileName} removed.");
                     }
                 }
             }
             else if (relativePath.StartsWith("Scripts/"))
+            {
+                if (ImGui.Button("Delete Script", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                {
+                    try
+                    {
+                        if (_scriptEditors.ContainsKey(absolutePath))
+                        {
+                            _scriptEditors.Remove(absolutePath);
+                        }
+                        File.Delete(absolutePath);
+                        GlobalState.SelectedResourcePath = null;
+                        GlobalState.OpenResources.Remove(relativePath);
+                        GlobalState.Log($"Deleted script {fileName}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalState.Log($"Error deleting script: {ex.Message}");
+                    }
+                }
+            }
+            else if (relativePath.StartsWith("Content/Rooms/") && relativePath.EndsWith(".json"))
+            {
+                if (ImGui.Button("Delete Room Config", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                {
+                    try
+                    {
+                        if (_roomStates.ContainsKey(absolutePath))
+                        {
+                            _roomStates.Remove(absolutePath);
+                        }
+                        File.Delete(absolutePath);
+                        GlobalState.SelectedResourcePath = null;
+                        GlobalState.OpenResources.Remove(relativePath);
+                        GlobalState.Log($"Deleted room config {fileName}.");
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalState.Log($"Error deleting room config: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        private static void DrawDocumentEditor(string relativePath)
+        {
+            string absolutePath = Path.Combine(GlobalState.CurrentProjectPath!, relativePath);
+            string fileName = Path.GetFileName(relativePath);
+
+            if (relativePath.StartsWith("Scripts/"))
             {
                 if (!_scriptEditors.TryGetValue(absolutePath, out var editor))
                 {
@@ -282,12 +347,11 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     _scriptEditors[absolutePath] = editor;
                 }
 
-                // C# Syntax Highlight text editor layout
                 float spacing = ImGui.GetStyle().ItemSpacing.X;
-                float threeButtonsWidth = (ImGui.GetContentRegionAvail().X - (spacing * 2)) / 3;
+                float halfWidth = (ImGui.GetContentRegionAvail().X - spacing) / 2;
 
                 bool ctrlS = ImGui.GetIO().KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.S);
-                if (ImGui.Button("Save Changes", new System.Numerics.Vector2(threeButtonsWidth, 30)) || ctrlS)
+                if (ImGui.Button("Save Changes", new System.Numerics.Vector2(halfWidth, 30)) || ctrlS)
                 {
                     try
                     {
@@ -301,7 +365,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 }
 
                 ImGui.SameLine();
-                if (ImGui.Button("Open External", new System.Numerics.Vector2(threeButtonsWidth, 30)))
+                if (ImGui.Button("Open External", new System.Numerics.Vector2(halfWidth, 30)))
                 {
                     try
                     {
@@ -315,31 +379,18 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                 }
 
-                ImGui.SameLine();
-                if (ImGui.Button("Delete Script", new System.Numerics.Vector2(threeButtonsWidth, 30)))
-                {
-                    try
-                    {
-                        _scriptEditors.Remove(absolutePath);
-                        File.Delete(absolutePath);
-                        GlobalState.OpenResources.Remove(relativePath);
-                        GlobalState.Log($"Deleted script {fileName}.");
-                    }
-                    catch (Exception ex)
-                    {
-                        GlobalState.Log($"Error deleting script: {ex.Message}");
-                    }
-                }
-
                 ImGui.Separator();
                 ImGui.Dummy(new System.Numerics.Vector2(0, 5));
 
-                // Render editor spanning the remaining region
                 editor.Render($"Editor##{absolutePath}", ImGui.GetContentRegionAvail());
             }
             else if (relativePath.StartsWith("Content/Rooms/") && relativePath.EndsWith(".json"))
             {
                 DrawRoomEditor(relativePath, absolutePath);
+            }
+            else
+            {
+                ImGui.Text($"Editing properties of {fileName} inside the right-side 'Properties' panel.");
             }
         }
 
@@ -355,7 +406,6 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             ImGui.Text("Room Layout Coordinates Editor");
             ImGui.Separator();
 
-            // List available sprites
             string spritesDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Sprites");
             var availableSprites = new List<string>();
             if (Directory.Exists(spritesDir))
@@ -368,7 +418,6 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 
             ImGui.Text($"Instances in Room: {state.Instances.Count}");
             
-            // List region
             ImGui.BeginChild($"InstancesList##{absolutePath}", new System.Numerics.Vector2(-1, 200), ImGuiChildFlags.Borders);
             for (int i = 0; i < state.Instances.Count; i++)
             {
@@ -387,12 +436,10 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             ImGui.Separator();
             ImGui.Dummy(new System.Numerics.Vector2(0, 5));
 
-            // Inspector form
             if (state.SelectedIndex >= 0 && state.SelectedIndex < state.Instances.Count)
             {
                 ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0.8f, 1f), "Edit Instance");
 
-                // Combobox
                 DrawSpriteComboBox(availableSprites, ref state.InstSpriteName, absolutePath);
 
                 ImGui.SetNextItemWidth(-1);

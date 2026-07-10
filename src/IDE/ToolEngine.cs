@@ -88,7 +88,8 @@ namespace MonoGameMaker.IDE
             // Render Subwindows
             ToolbarWindow();
             ProjectExplorer.Draw();
-            ResourceEditors.DrawAll();
+            ResourceEditors.DrawPropertiesWindow();
+            ResourceEditors.DrawDocumentWindows();
             ConsoleLogsWindow();
 
             // End main dockspace wrapper window
@@ -176,7 +177,7 @@ namespace MonoGameMaker.IDE
 
                 igDockBuilderDockWindow("Toolbar", dock_id_top);
                 igDockBuilderDockWindow("Project Explorer", dock_id_left);
-                igDockBuilderDockWindow("Inspector", dock_id_right);
+                igDockBuilderDockWindow("Properties", dock_id_right);
                 igDockBuilderDockWindow("Console Output", dock_id_bottom);
 
                 igDockBuilderFinish(dockspaceId);
