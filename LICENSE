@@ -1,0 +1,27 @@
+Custom Source-Available Non-Commercial Tool License
+Version 1.0, July 2026
+
+Copyright (c) 2026 Mono GameMaker Contributors.
+
+This License governs the use, modification, and distribution of the software known as "Mono GameMaker" (the "Software"). 
+
+By using, modifying, or distributing the Software, you agree to be bound by the terms of this License.
+
+1. PERMITTED USES
+Subject to the terms and conditions of this License, you are granted a non-exclusive, worldwide, royalty-free license to:
+a. Download, view, compile, run, and modify the source code of the Software.
+b. Distribute modifications and submit contributions (such as pull requests) back to the original source code repository.
+c. Use the Software (including both its editor/IDE and runtime components) to create, build, compile, and publish video games or other digital content ("Generated Content").
+d. Distribute and sell the Generated Content (e.g., your compiled video games) for commercial profit, without any royalty or fee due to the creators of the Software.
+
+2. RESTRICTIONS & PROHIBITED USES
+You may not:
+a. Sell, rent, lease, sublicense, or distribute copies of the Software (either in source code or compiled binary forms) for commercial profit.
+b. Create a direct commercial competitor to the Software using this source code.
+c. Bundle the Software (the editor/IDE) into other commercial packages or tools for sale.
+
+3. COPYRIGHT NOTICE & ATTRIBUTION
+You must retain the copyright notice above and this License file in all copies or substantial portions of the source code of the Software.
+
+4. DISCLAIMER OF WARRANTY
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

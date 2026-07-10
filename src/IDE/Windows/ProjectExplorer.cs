@@ -1,0 +1,93 @@
+using ImGuiNET;
+using System.IO;
+using MonoGameMaker.IDE.Core;
+
+namespace MonoGameMaker.IDE.Windows
+{
+    public static class ProjectExplorer
+    {
+        public static void Draw()
+        {
+            ImGui.Begin("Project Explorer");
+
+            if (string.IsNullOrEmpty(GlobalState.CurrentProjectPath))
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.8f, 0.8f, 1f), "No project loaded.");
+                ImGui.End();
+                return;
+            }
+
+            if (GlobalState.CurrentProjectCache == null)
+            {
+                ImGui.Text("Loading project tree...");
+                ImGui.End();
+                return;
+            }
+
+            FileTreeNode? root = GlobalState.CurrentProjectCache.GetSnapshot();
+            if (root == null)
+            {
+                ImGui.Text("Initializing file system cache...");
+                ImGui.End();
+                return;
+            }
+
+            ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(4, 4));
+
+            DrawNode(root);
+
+            ImGui.PopStyleVar();
+            ImGui.End();
+        }
+
+        private static void DrawNode(FileTreeNode node)
+        {
+            string relativePath = node.FullPath == GlobalState.CurrentProjectPath
+                ? ""
+                : Path.GetRelativePath(GlobalState.CurrentProjectPath!, node.FullPath).Replace("\\", "/");
+
+            if (!node.IsDirectory)
+            {
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
+                if (GlobalState.OpenResources.Contains(relativePath))
+                {
+                    flags |= ImGuiTreeNodeFlags.Selected;
+                }
+
+                ImGui.TreeNodeEx(node.Name, flags);
+                if (ImGui.IsItemClicked())
+                {
+                    GlobalState.OpenResources.Add(relativePath);
+                }
+            }
+            else
+            {
+                ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.None;
+                if (GlobalState.OpenResources.Contains(relativePath))
+                {
+                    flags |= ImGuiTreeNodeFlags.Selected;
+                }
+
+                if (node.FullPath == GlobalState.CurrentProjectPath)
+                {
+                    flags |= ImGuiTreeNodeFlags.DefaultOpen;
+                }
+
+                bool opened = ImGui.TreeNodeEx(node.Name, flags);
+                if (ImGui.IsItemClicked())
+                {
+                    GlobalState.OpenResources.Add(relativePath);
+                }
+
+                if (opened)
+                {
+                    foreach (var child in node.Children)
+                    {
+                        DrawNode(child);
+                    }
+                    ImGui.TreePop();
+                }
+            }
+        }
+    }
+}
