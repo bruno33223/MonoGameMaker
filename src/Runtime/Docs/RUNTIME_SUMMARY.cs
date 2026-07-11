@@ -51,9 +51,15 @@ namespace MonoGameMaker.Runtime
         public virtual void Draw(SpriteBatch spriteBatch) { }
 
         /// <summary>
-        /// Called once per frame to draw UI overlays.
+        /// Called once per frame to draw UI overlays. Can be overridden to do standard SpriteBatch UI drawing.
+        /// By default, calls the parameterless DrawUI() overload to support ImGui-based user interface drawing.
         /// </summary>
         public virtual void DrawUI(SpriteBatch spriteBatch) { }
+
+        /// <summary>
+        /// Called once per frame to draw screen-space UI elements. Override this method to perform direct ImGui calls (e.g. ImGui.Begin, ImGui.Button).
+        /// </summary>
+        public virtual void DrawUI() { }
 
         /// <summary>
         /// Called dynamically when this entity collides with another entity.

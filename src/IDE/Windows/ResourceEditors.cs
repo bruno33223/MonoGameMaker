@@ -118,7 +118,12 @@ namespace MonoGameMaker.IDE.Windows
                 if (string.IsNullOrEmpty(fileName)) fileName = res;
 
                 bool isOpen = true;
-                ImGui.Begin($"Document: {fileName}##{res}", ref isOpen);
+                ImGuiWindowFlags docFlags = ImGuiWindowFlags.None;
+                if (GlobalState.IsPlaying && res.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    docFlags |= ImGuiWindowFlags.NoMove;
+                }
+                ImGui.Begin($"Document: {fileName}##{res}", ref isOpen, docFlags);
 
                 if (!isOpen)
                 {
@@ -1255,7 +1260,7 @@ namespace MonoGameMaker.IDE.Windows
                                         var scriptVal = scriptProp?.GetValue(entity);
                                         if (scriptVal != null)
                                         {
-                                            var drawUiMethod = scriptVal.GetType().GetMethod("DrawUI");
+                                            var drawUiMethod = scriptVal.GetType().GetMethod("DrawUI", new Type[] { typeof(SpriteBatch) });
                                             try
                                             {
                                                 drawUiMethod?.Invoke(scriptVal, new object[] { state.SpriteBatch });
