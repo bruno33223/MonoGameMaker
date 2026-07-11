@@ -458,6 +458,8 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 
                 // --- COLUMN 1: Settings / Hierarchy ---
                 ImGui.TableSetColumnIndex(0);
+                
+                ImGui.BeginChild($"SceneEditorLeftChild##{absolutePath}", new System.Numerics.Vector2(-1, -1), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
 
                 if (ImGui.BeginTabBar($"SceneEditorTabs##{absolutePath}"))
                 {
@@ -492,6 +494,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         }
 
                         string bgImage = state.Scene.BackgroundImage;
+                        ImGui.Text("Background Image");
                         DrawBackgroundImageComboBox(availableTextures, ref bgImage, absolutePath);
                         state.Scene.BackgroundImage = bgImage;
 
@@ -615,14 +618,13 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     ImGui.EndTabBar();
                 }
 
+                ImGui.EndChild();
+
                 // --- COLUMN 2: Visual Viewport Canvas ---
                 ImGui.TableSetColumnIndex(1);
 
-                System.Numerics.Vector2 canvasSize = ImGui.GetContentRegionAvail() - new System.Numerics.Vector2(0, 40);
-                if (canvasSize.X < 100) canvasSize.X = 100;
-                if (canvasSize.Y < 100) canvasSize.Y = 100;
+                ImGui.BeginChild($"SceneEditorViewportChild##{absolutePath}", new System.Numerics.Vector2(-1, -1), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
 
-                // Fulfill acceptance criteria: "destruído e recriado sempre que o usuário modificar as dimensões base"
                 int desiredW = state.Scene.Width;
                 int desiredH = state.Scene.Height;
 
@@ -720,16 +722,14 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
 
                 // Viewport mouse and coordinate translations
+                System.Numerics.Vector2 canvasSize = new System.Numerics.Vector2(desiredW, desiredH);
                 System.Numerics.Vector2 canvasPos = ImGui.GetCursorScreenPos();
                 ImGui.ImageButton($"ViewportCanvas##{absolutePath}", state.RenderTargetId, canvasSize, System.Numerics.Vector2.Zero, System.Numerics.Vector2.One);
 
-                // Mouse coordinates translation from window space to local scene space (scaled properly)
+                // Mouse coordinates translation from window space to local scene space (since it's drawn 1:1, it's 1:1!)
                 System.Numerics.Vector2 mousePos = ImGui.GetMousePos();
-                float localX = mousePos.X - canvasPos.X;
-                float localY = mousePos.Y - canvasPos.Y;
-                
-                float scaledX = (localX / canvasSize.X) * desiredW;
-                float scaledY = (localY / canvasSize.Y) * desiredH;
+                float scaledX = mousePos.X - canvasPos.X;
+                float scaledY = mousePos.Y - canvasPos.Y;
 
                 // Mouse Picking logic (Z-order reverse search topmost first)
                 if (ImGui.IsItemHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
@@ -770,25 +770,22 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                 }
 
-                // Mouse Dragging logic
+                // Mouse Dragging logic (1:1 dragging delta)
                 if (state.SelectedIndex >= 0 && state.SelectedIndex < state.Scene.Instances.Count)
                 {
                     if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
                     {
                         System.Numerics.Vector2 dragDelta = ImGui.GetIO().MouseDelta;
-                        float scaleX = (float)desiredW / canvasSize.X;
-                        float scaleY = (float)desiredH / canvasSize.Y;
-
                         var inst = state.Scene.Instances[state.SelectedIndex];
-                        inst.x += dragDelta.X * scaleX;
-                        inst.y += dragDelta.Y * scaleY;
+                        inst.x += dragDelta.X;
+                        inst.y += dragDelta.Y;
 
                         state.InstX = (int)inst.x;
                         state.InstY = (int)inst.y;
                     }
                 }
 
-                // Drag & Drop zones
+                // Drag & Drop zones (1:1 drop coordinates)
                 if (ImGui.BeginDragDropTarget())
                 {
                     var payload = ImGui.AcceptDragDropPayload("EXPLORER_ASSET");
@@ -804,11 +801,8 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                             {
                                 string assetId = Path.GetFileNameWithoutExtension(draggedPath);
                                 
-                                float dropLocalX = mousePos.X - canvasPos.X;
-                                float dropLocalY = mousePos.Y - canvasPos.Y;
-
-                                float dropScaledX = (dropLocalX / canvasSize.X) * desiredW;
-                                float dropScaledY = (dropLocalY / canvasSize.Y) * desiredH;
+                                float dropScaledX = mousePos.X - canvasPos.X;
+                                float dropScaledY = mousePos.Y - canvasPos.Y;
 
                                 state.Scene.Instances.Add(new SceneSerializer.EntityInstance
                                 {
@@ -822,6 +816,8 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                     ImGui.EndDragDropTarget();
                 }
+
+                ImGui.EndChild();
 
                 ImGui.EndTable();
             }
