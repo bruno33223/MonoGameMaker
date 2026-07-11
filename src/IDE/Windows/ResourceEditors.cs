@@ -391,14 +391,18 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     prefab.CustomProperties.Remove(key);
                 }
 
-                ImGui.Text("Add Property (Key / Value):");
-                ImGui.SetNextItemWidth(100);
+                ImGui.Text("Add Property:");
+                
+                ImGui.Text("Key:");
+                ImGui.SetNextItemWidth(-1);
                 ImGui.InputText($"##NewKey_{absolutePath}", ref _newPropKey, 64);
-                ImGui.SameLine();
-                ImGui.SetNextItemWidth(120);
+                
+                ImGui.Text("Value:");
+                ImGui.SetNextItemWidth(-1);
                 ImGui.InputText($"##NewVal_{absolutePath}", ref _newPropValue, 128);
-                ImGui.SameLine();
-                if (ImGui.Button($"Add Property##Add_{absolutePath}"))
+                
+                ImGui.Dummy(new System.Numerics.Vector2(0, 2));
+                if (ImGui.Button($"Add Property##Add_{absolutePath}", new System.Numerics.Vector2(-1, 30)))
                 {
                     string k = _newPropKey.Trim();
                     if (!string.IsNullOrEmpty(k))
@@ -883,14 +887,18 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                                     }
                                 }
 
-                                ImGui.Text("Add Override (Key / Value):");
-                                ImGui.SetNextItemWidth(100);
+                                ImGui.Text("Add Custom Override:");
+                                
+                                ImGui.Text("Key:");
+                                ImGui.SetNextItemWidth(-1);
                                 ImGui.InputText($"##InstNewKey_{absolutePath}", ref _newPropKey, 64);
-                                ImGui.SameLine();
-                                ImGui.SetNextItemWidth(120);
+                                
+                                ImGui.Text("Value:");
+                                ImGui.SetNextItemWidth(-1);
                                 ImGui.InputText($"##InstNewVal_{absolutePath}", ref _newPropValue, 128);
-                                ImGui.SameLine();
-                                if (ImGui.Button($"Add Override##InstAdd_{absolutePath}"))
+                                
+                                ImGui.Dummy(new System.Numerics.Vector2(0, 2));
+                                if (ImGui.Button($"Add Override##InstAdd_{absolutePath}", new System.Numerics.Vector2(-1, 30)))
                                 {
                                     string k = _newPropKey.Trim();
                                     if (!string.IsNullOrEmpty(k))
