@@ -7,6 +7,8 @@ namespace MonoGameMaker.IDE.Core
     {
         public SceneSerializer.EntityInstance? Parent { get; set; }
         public bool Enabled { get; set; } = true;
+        protected internal GameTime? Time { get; set; }
+        protected internal InputManager? Input { get; set; }
 
         public virtual void Awake() { }
         public virtual void Start() { }

@@ -27,6 +27,7 @@ namespace MonoGameMaker.IDE
         }
         private bool _wasPlaying = false;
         private bool _isLayoutReady = false;
+        private readonly InputManager _inputManager = new();
 
         // Layout States
         private bool _isFirstFrame = true;
@@ -95,6 +96,8 @@ namespace MonoGameMaker.IDE
 
         protected override void Update(GameTime gameTime)
         {
+            _inputManager.Update();
+
             if (GlobalState.IsPlaying && !_wasPlaying)
             {
                 var activeScene = GetActiveScene();
@@ -105,6 +108,9 @@ namespace MonoGameMaker.IDE
                     {
                         foreach (var comp in inst.Components)
                         {
+                            comp.Time = gameTime;
+                            comp.Input = _inputManager;
+
                             if (comp.Enabled)
                             {
                                 try
@@ -123,6 +129,9 @@ namespace MonoGameMaker.IDE
                     {
                         foreach (var comp in inst.Components)
                         {
+                            comp.Time = gameTime;
+                            comp.Input = _inputManager;
+
                             if (comp.Enabled)
                             {
                                 try
@@ -150,6 +159,9 @@ namespace MonoGameMaker.IDE
                     {
                         foreach (var comp in inst.Components)
                         {
+                            comp.Time = gameTime;
+                            comp.Input = _inputManager;
+
                             if (comp.Enabled)
                             {
                                 try
@@ -188,6 +200,7 @@ namespace MonoGameMaker.IDE
             ToolbarWindow();
             ProjectExplorer.Draw();
             ResourceEditors.DrawPropertiesWindow();
+            InspectorWindow.Draw();
             ResourceEditors.DrawDocumentWindows();
             ConsoleLogsWindow();
 

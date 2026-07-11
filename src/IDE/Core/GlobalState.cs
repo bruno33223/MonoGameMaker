@@ -15,6 +15,7 @@ namespace MonoGameMaker.IDE.Core
         public static FileSystemCache? CurrentProjectCache { get; set; }
         public static HashSet<string> OpenResources { get; } = new();
         public static bool IsPlaying { get; set; } = false;
+        public static SceneSerializer.EntityInstance? SelectedNode { get; set; }
         
         public static readonly List<string> ConsoleLogs = new();
         public static Process? RunningGameProcess { get; set; }

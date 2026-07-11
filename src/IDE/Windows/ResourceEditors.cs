@@ -812,6 +812,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                                 state.InstPrefabName = inst.prefabName;
                                 state.InstX = (int)inst.x;
                                 state.InstY = (int)inst.y;
+                                GlobalState.SelectedNode = inst;
                             }
                         }
                         ImGui.EndChild();
@@ -963,6 +964,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                                 state.Scene.Instances.RemoveAt(state.SelectedIndex);
                                 GlobalState.Log($"Removed entity {state.SelectedIndex}.");
                                 state.SelectedIndex = -1;
+                                GlobalState.SelectedNode = null;
                             }
                         }
                         else
@@ -1196,6 +1198,11 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         state.InstPrefabName = inst.prefabName;
                         state.InstX = (int)inst.x;
                         state.InstY = (int)inst.y;
+                        GlobalState.SelectedNode = inst;
+                    }
+                    else
+                    {
+                        GlobalState.SelectedNode = null;
                     }
                 }
 
