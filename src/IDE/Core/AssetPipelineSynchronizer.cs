@@ -11,15 +11,15 @@ namespace MonoGameMaker.IDE.Core
             try
             {
                 string fileName = Path.GetFileName(sourceFilePath);
-                string relativeDestDir = assetType.ToLower() switch
+                string normalizedType = assetType.ToLower() switch
                 {
-                    "sprites" => Path.Combine("Content", "Sprites"),
-                    "backgrounds" => Path.Combine("Content", "Backgrounds"),
-                    "sounds" => Path.Combine("Content", "Sounds"),
+                    "sprites" or "backgrounds" or "textures" => "Textures",
+                    "sounds" or "audio" => "Audio",
+                    "models" => "Models",
                     _ => throw new ArgumentException($"Unknown asset type: {assetType}")
                 };
 
-                string destDir = Path.Combine(projectRoot, relativeDestDir);
+                string destDir = Path.Combine(projectRoot, "Content", normalizedType);
                 if (!Directory.Exists(destDir))
                 {
                     Directory.CreateDirectory(destDir);
@@ -44,13 +44,12 @@ namespace MonoGameMaker.IDE.Core
                 string importer = "";
                 string processor = "";
                 
-                if (assetType.Equals("sprites", StringComparison.OrdinalIgnoreCase) || 
-                    assetType.Equals("backgrounds", StringComparison.OrdinalIgnoreCase))
+                if (normalizedType == "Textures")
                 {
                     importer = "TextureImporter";
                     processor = "TextureProcessor";
                 }
-                else if (assetType.Equals("sounds", StringComparison.OrdinalIgnoreCase))
+                else if (normalizedType == "Audio")
                 {
                     if (ext == ".wav")
                     {
@@ -68,9 +67,14 @@ namespace MonoGameMaker.IDE.Core
                         processor = "SoundEffectProcessor";
                     }
                 }
+                else if (normalizedType == "Models")
+                {
+                    importer = "ModelImporter";
+                    processor = "ModelProcessor";
+                }
 
                 // Relative path inside Content/ for MGCB
-                string mgcbRelativePath = $"{assetType}/{fileName}".Replace("\\", "/");
+                string mgcbRelativePath = $"{normalizedType}/{fileName}".Replace("\\", "/");
 
                 string mgcbContent = File.ReadAllText(mgcbPath);
                 

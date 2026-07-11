@@ -18,6 +18,42 @@ namespace MonoGameMaker.IDE.Core
             _renderer = renderer;
         }
 
+        public static IntPtr BindRenderTarget(Texture2D renderTarget)
+        {
+            if (_renderer == null) return IntPtr.Zero;
+            return _renderer.BindTexture(renderTarget);
+        }
+
+        public static void UnbindRenderTarget(IntPtr imguiId)
+        {
+            if (_renderer == null || imguiId == IntPtr.Zero) return;
+            try
+            {
+                _renderer.UnbindTexture(imguiId);
+            }
+            catch {}
+        }
+
+        public static Texture2D? GetTexture(string absolutePath)
+        {
+            if (_graphicsDevice == null || _renderer == null || !File.Exists(absolutePath))
+                return null;
+
+            if (_loadedPreviews.TryGetValue(absolutePath, out var preview))
+            {
+                return preview.texture;
+            }
+
+            int w, h;
+            GetPreview(absolutePath, out w, out h);
+            if (_loadedPreviews.TryGetValue(absolutePath, out var preview2))
+            {
+                return preview2.texture;
+            }
+
+            return null;
+        }
+
         public static IntPtr GetPreview(string absolutePath, out int width, out int height)
         {
             width = 0;

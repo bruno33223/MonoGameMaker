@@ -83,52 +83,52 @@ namespace MonoGameMaker.IDE.Core
 
                 // 3. Edit csproj:
                 // - Change TargetFramework to net8.0
-                // - Add None Update for Content/Rooms to copy to output directory
-                logCallback("Updating csproj configuration for target framework and rooms...");
+                // - Add None Update for Content/Scenes to copy to output directory
+                logCallback("Updating csproj configuration for target framework and scenes...");
                 string csprojContent = File.ReadAllText(csprojPath);
                 
                 // Replace target framework
                 csprojContent = Regex.Replace(csprojContent, @"<TargetFramework>.*?</TargetFramework>", "<TargetFramework>net8.0</TargetFramework>");
 
-                // Inject CopyToOutputDirectory directive for Rooms JSON files
-                string roomsInclude = @"
+                // Inject CopyToOutputDirectory directive for Scenes JSON files
+                string scenesInclude = @"
   <ItemGroup>
-    <None Update=""Content\Rooms\**\*.*"">
+    <None Update=""Content\Scenes\**\*.*"">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 </Project>";
-                csprojContent = csprojContent.Replace("</Project>", roomsInclude);
+                csprojContent = csprojContent.Replace("</Project>", scenesInclude);
                 File.WriteAllText(csprojPath, csprojContent);
 
                 // 4. Create base directories
                 logCallback("Creating folder structure...");
                 string contentPath = Path.Combine(targetDirectory, "Content");
-                string spritesPath = Path.Combine(contentPath, "Sprites");
-                string backgroundsPath = Path.Combine(contentPath, "Backgrounds");
-                string soundsPath = Path.Combine(contentPath, "Sounds");
-                string roomsPath = Path.Combine(contentPath, "Rooms");
+                string texturesPath = Path.Combine(contentPath, "Textures");
+                string audioPath = Path.Combine(contentPath, "Audio");
+                string modelsPath = Path.Combine(contentPath, "Models");
+                string scenesPath = Path.Combine(contentPath, "Scenes");
                 string scriptsPath = Path.Combine(targetDirectory, "Scripts");
 
-                Directory.CreateDirectory(spritesPath);
-                Directory.CreateDirectory(backgroundsPath);
-                Directory.CreateDirectory(soundsPath);
-                Directory.CreateDirectory(roomsPath);
+                Directory.CreateDirectory(texturesPath);
+                Directory.CreateDirectory(audioPath);
+                Directory.CreateDirectory(modelsPath);
+                Directory.CreateDirectory(scenesPath);
                 Directory.CreateDirectory(scriptsPath);
 
-                // 5. Create default room_init.json
-                string roomInitPath = Path.Combine(roomsPath, "room_init.json");
-                if (!File.Exists(roomInitPath))
+                // 5. Create default scene_init.json
+                string sceneInitPath = Path.Combine(scenesPath, "scene_init.json");
+                if (!File.Exists(sceneInitPath))
                 {
-                    File.WriteAllText(roomInitPath, "[]");
+                    File.WriteAllText(sceneInitPath, "[]");
                 }
 
-                // 6. Inject Runtime/RoomLoader.cs
-                logCallback("Injecting RoomLoader runtime script...");
+                // 6. Inject Runtime/SceneLoader.cs
+                logCallback("Injecting SceneLoader runtime script...");
                 string runtimeDir = Path.Combine(targetDirectory, "Runtime");
                 Directory.CreateDirectory(runtimeDir);
-                string roomLoaderPath = Path.Combine(runtimeDir, "RoomLoader.cs");
-                File.WriteAllText(roomLoaderPath, GetRoomLoaderCode());
+                string sceneLoaderPath = Path.Combine(runtimeDir, "SceneLoader.cs");
+                File.WriteAllText(sceneLoaderPath, GetSceneLoaderCode());
 
                 // 7. Inject Game1.cs
                 logCallback("Injecting customized Game1 boilerplate...");
@@ -171,7 +171,7 @@ namespace MonoGameMaker.IDE.Core
             }
         }
 
-        private static string GetRoomLoaderCode()
+        private static string GetSceneLoaderCode()
         {
             return @"using System;
 using System.Collections.Generic;
@@ -183,9 +183,9 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace MonoGameMaker.Runtime
 {
-    public static class RoomLoader
+    public static class SceneLoader
     {
-        public static List<GameEntity> LoadRoom(string jsonPath, ContentManager content)
+        public static List<GameEntity> LoadScene(string jsonPath, ContentManager content)
         {
             var entities = new List<GameEntity>();
             try
@@ -211,7 +211,7 @@ namespace MonoGameMaker.Runtime
                 if (File.Exists(jsonPath))
                 {
                     string jsonContent = File.ReadAllText(jsonPath);
-                    var instances = JsonSerializer.Deserialize<List<RoomInstance>>(jsonContent);
+                    var instances = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent);
                     if (instances != null)
                     {
                         foreach (var inst in instances)
@@ -219,7 +219,7 @@ namespace MonoGameMaker.Runtime
                             Texture2D texture = null;
                             try
                             {
-                                string assetPath = ""Sprites/"" + inst.spriteName;
+                                string assetPath = ""Textures/"" + inst.assetId;
                                 if (assetPath.EndsWith("".png"") || assetPath.EndsWith("".jpg"") || assetPath.EndsWith("".jpeg""))
                                 {
                                     assetPath = assetPath.Substring(0, assetPath.LastIndexOf('.'));
@@ -228,12 +228,12 @@ namespace MonoGameMaker.Runtime
                             }
                             catch (Exception ex)
                             {
-                                Console.WriteLine($""Error loading texture {inst.spriteName}: {ex.Message}"");
+                                Console.WriteLine($""Error loading texture {inst.assetId}: {ex.Message}"");
                             }
 
                             entities.Add(new GameEntity
                             {
-                                SpriteName = inst.spriteName,
+                                AssetId = inst.assetId,
                                 Texture = texture,
                                 Position = new Vector2(inst.x, inst.y)
                             });
@@ -242,27 +242,27 @@ namespace MonoGameMaker.Runtime
                 }
                 else
                 {
-                    Console.WriteLine($""Room config file not found: {jsonPath}"");
+                    Console.WriteLine($""Scene config file not found: {jsonPath}"");
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($""Error parsing room: {ex.Message}"");
+                Console.WriteLine($""Error parsing scene: {ex.Message}"");
             }
             return entities;
         }
     }
 
-    public class RoomInstance
+    public class EntityInstance
     {
-        public string spriteName { get; set; } = string.Empty;
+        public string assetId { get; set; } = string.Empty;
         public float x { get; set; }
         public float y { get; set; }
     }
 
     public class GameEntity
     {
-        public string SpriteName { get; set; } = string.Empty;
+        public string AssetId { get; set; } = string.Empty;
         public Texture2D Texture { get; set; }
         public Vector2 Position { get; set; }
     }
@@ -310,8 +310,8 @@ namespace {projectName}
             _defaultTexture = new Texture2D(GraphicsDevice, 1, 1);
             _defaultTexture.SetData(new[] {{ Color.Magenta }});
 
-            string jsonPath = Path.Combine(""Rooms"", ""room_init.json"");
-            _entities = RoomLoader.LoadRoom(jsonPath, Content);
+            string jsonPath = Path.Combine(""Scenes"", ""scene_init.json"");
+            _entities = SceneLoader.LoadScene(jsonPath, Content);
         }}
 
         protected override void Update(GameTime gameTime)

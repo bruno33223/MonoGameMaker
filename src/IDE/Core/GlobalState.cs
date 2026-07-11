@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace MonoGameMaker.IDE.Core
 {
     public static class GlobalState
     {
+        public static GraphicsDevice? GraphicsDevice { get; set; }
         public static string? CurrentProjectPath { get; set; }
         public static string? CurrentProjectName { get; set; }
         public static string? SelectedResourcePath { get; set; }

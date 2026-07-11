@@ -5,6 +5,8 @@ using System.Linq;
 using System.Diagnostics;
 using ImGuiNET;
 using ImGuiColorTextEditNet;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using MonoGameMaker.IDE.Core;
 
 namespace MonoGameMaker.IDE.Windows
@@ -13,18 +15,24 @@ namespace MonoGameMaker.IDE.Windows
     {
         private static readonly Dictionary<string, string> _importPaths = new();
         private static readonly Dictionary<string, TextEditor> _scriptEditors = new();
-        private static readonly Dictionary<string, RoomEditorState> _roomStates = new();
         
-        private static string _newScriptName = "Script1";
-
-        private class RoomEditorState
+        private class SceneEditorState
         {
-            public List<RoomSerializer.RoomInstance> Instances = new();
+            public List<SceneSerializer.EntityInstance> Instances = new();
             public int SelectedIndex = -1;
-            public string InstSpriteName = "";
+            public string InstTextureName = "";
             public int InstX = 100;
             public int InstY = 100;
+
+            public RenderTarget2D? RenderTarget;
+            public IntPtr RenderTargetId = IntPtr.Zero;
+            public SpriteBatch? SpriteBatch;
+            public Texture2D? FallbackTexture;
         }
+
+        private static readonly Dictionary<string, SceneEditorState> _sceneStates = new();
+        
+        private static string _newScriptName = "Script1";
 
         public static void DrawPropertiesWindow()
         {
@@ -90,9 +98,16 @@ namespace MonoGameMaker.IDE.Windows
                         _scriptEditors.Remove(absolutePath);
                     }
                     
-                    if (_roomStates.ContainsKey(absolutePath))
+                    if (_sceneStates.TryGetValue(absolutePath, out var sState))
                     {
-                        _roomStates.Remove(absolutePath);
+                        if (sState.RenderTargetId != IntPtr.Zero)
+                        {
+                            TextureCache.UnbindRenderTarget(sState.RenderTargetId);
+                        }
+                        sState.RenderTarget?.Dispose();
+                        sState.FallbackTexture?.Dispose();
+                        sState.SpriteBatch?.Dispose();
+                        _sceneStates.Remove(absolutePath);
                     }
 
                     GlobalState.OpenResources.Remove(res);
@@ -112,7 +127,7 @@ namespace MonoGameMaker.IDE.Windows
             ImGui.Separator();
             ImGui.Dummy(new System.Numerics.Vector2(0, 10));
 
-            if (folderName == "Sprites" || folderName == "Backgrounds" || folderName == "Sounds")
+            if (folderName == "Textures" || folderName == "Audio" || folderName == "Models")
             {
                 ImGui.Text("Import New Asset");
 
@@ -131,7 +146,7 @@ namespace MonoGameMaker.IDE.Windows
                 ImGui.SameLine();
                 if (ImGui.Button("Browse...", new System.Numerics.Vector2(92, 0)))
                 {
-                    string filter = folderName == "Sounds" ? "wav,mp3" : "png,jpg,jpeg";
+                    string filter = folderName == "Audio" ? "wav,mp3" : (folderName == "Models" ? "fbx,obj" : "png,jpg,jpeg");
                     var dialogResult = NativeFileDialogSharp.Dialog.FileOpen(filter);
                     if (dialogResult.IsOk)
                     {
@@ -206,20 +221,20 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                 }
             }
-            else if (folderName == "Rooms")
+            else if (folderName == "Scenes")
             {
-                ImGui.Text("Create New Room Configuration");
-                if (ImGui.Button("Create Default room_init.json", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                ImGui.Text("Create New Scene Configuration");
+                if (ImGui.Button("Create Default scene_init.json", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
-                    string dest = Path.Combine(absolutePath, "room_init.json");
+                    string dest = Path.Combine(absolutePath, "scene_init.json");
                     if (File.Exists(dest))
                     {
-                        GlobalState.Log("Room configuration already exists.");
+                        GlobalState.Log("Scene configuration already exists.");
                     }
                     else
                     {
                         File.WriteAllText(dest, "[]");
-                        GlobalState.Log("Created room_init.json.");
+                        GlobalState.Log("Created scene_init.json.");
                     }
                 }
             }
@@ -262,9 +277,9 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             ImGui.Separator();
             ImGui.Dummy(new System.Numerics.Vector2(0, 10));
 
-            if (relativePath.StartsWith("Content/Sprites/") || 
-                relativePath.StartsWith("Content/Backgrounds/") || 
-                relativePath.StartsWith("Content/Sounds/"))
+            if (relativePath.StartsWith("Content/Textures/") || 
+                relativePath.StartsWith("Content/Audio/") || 
+                relativePath.StartsWith("Content/Models/"))
             {
                 if (ImGui.Button("Delete Asset From Project", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
@@ -299,24 +314,31 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                 }
             }
-            else if (relativePath.StartsWith("Content/Rooms/") && relativePath.EndsWith(".json"))
+            else if (relativePath.StartsWith("Content/Scenes/") && relativePath.EndsWith(".json"))
             {
-                if (ImGui.Button("Delete Room Config", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                if (ImGui.Button("Delete Scene Config", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
                     try
                     {
-                        if (_roomStates.ContainsKey(absolutePath))
+                        if (_sceneStates.TryGetValue(absolutePath, out var sState))
                         {
-                            _roomStates.Remove(absolutePath);
+                            if (sState.RenderTargetId != IntPtr.Zero)
+                            {
+                                TextureCache.UnbindRenderTarget(sState.RenderTargetId);
+                            }
+                            sState.RenderTarget?.Dispose();
+                            sState.FallbackTexture?.Dispose();
+                            sState.SpriteBatch?.Dispose();
+                            _sceneStates.Remove(absolutePath);
                         }
                         File.Delete(absolutePath);
                         GlobalState.SelectedResourcePath = null;
                         GlobalState.OpenResources.Remove(relativePath);
-                        GlobalState.Log($"Deleted room config {fileName}.");
+                        GlobalState.Log($"Deleted scene config {fileName}.");
                     }
                     catch (Exception ex)
                     {
-                        GlobalState.Log($"Error deleting room config: {ex.Message}");
+                        GlobalState.Log($"Error deleting scene config: {ex.Message}");
                     }
                 }
             }
@@ -384,9 +406,9 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 
                 editor.Render($"Editor##{absolutePath}", ImGui.GetContentRegionAvail());
             }
-            else if (relativePath.StartsWith("Content/Rooms/") && relativePath.EndsWith(".json"))
+            else if (relativePath.StartsWith("Content/Scenes/") && relativePath.EndsWith(".json"))
             {
-                DrawRoomEditor(relativePath, absolutePath);
+                DrawSceneEditor(relativePath, absolutePath);
             }
             else
             {
@@ -394,39 +416,53 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             }
         }
 
-        private static void DrawRoomEditor(string relativePath, string absolutePath)
+        private static void DrawSceneEditor(string relativePath, string absolutePath)
         {
-            if (!_roomStates.TryGetValue(absolutePath, out var state))
+            if (!_sceneStates.TryGetValue(absolutePath, out var state))
             {
-                state = new RoomEditorState();
-                state.Instances = RoomSerializer.LoadRoomPath(absolutePath, GlobalState.Log);
-                _roomStates[absolutePath] = state;
+                state = new SceneEditorState();
+                state.Instances = SceneSerializer.LoadScenePath(absolutePath, GlobalState.Log);
+                state.SpriteBatch = new SpriteBatch(GlobalState.GraphicsDevice!);
+                
+                state.FallbackTexture = new Texture2D(GlobalState.GraphicsDevice!, 1, 1);
+                state.FallbackTexture.SetData(new[] { Microsoft.Xna.Framework.Color.Magenta });
+
+                _sceneStates[absolutePath] = state;
             }
 
-            ImGui.Text("Room Layout Coordinates Editor");
+            ImGui.Text("Scene Layout & Visual Viewport Editor");
             ImGui.Separator();
 
-            string spritesDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Sprites");
-            var availableSprites = new List<string>();
-            if (Directory.Exists(spritesDir))
+            // Find available textures
+            string texturesDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures");
+            var availableTextures = new List<string>();
+            if (Directory.Exists(texturesDir))
             {
-                foreach (var file in Directory.GetFiles(spritesDir))
+                foreach (var file in Directory.GetFiles(texturesDir))
                 {
-                    availableSprites.Add(Path.GetFileNameWithoutExtension(file));
+                    availableTextures.Add(Path.GetFileNameWithoutExtension(file));
                 }
             }
 
-            ImGui.Text($"Instances in Room: {state.Instances.Count}");
+            // Split window: Column 1 = Sidebar / Inspector, Column 2 = Viewport
+            ImGui.Columns(2, $"SceneEditorCols##{absolutePath}", true);
+            if (ImGui.GetColumnWidth(0) > 400 || ImGui.GetColumnWidth(0) < 200)
+            {
+                ImGui.SetColumnWidth(0, 300);
+            }
+
+            // --- COLUMN 1: Hierarchy / Sidebar ---
+            ImGui.Text($"Entities in Scene: {state.Instances.Count}");
             
-            ImGui.BeginChild($"InstancesList##{absolutePath}", new System.Numerics.Vector2(-1, 200), ImGuiChildFlags.Borders);
+            ImGui.BeginChild($"EntitiesList##{absolutePath}", new System.Numerics.Vector2(-1, 200), ImGuiChildFlags.Borders);
             for (int i = 0; i < state.Instances.Count; i++)
             {
                 var inst = state.Instances[i];
-                string label = $"{i}: Sprite '{inst.spriteName}' at ({inst.x}, {inst.y})";
+                string label = $"{i}: '{inst.assetId}' at ({inst.x:F0}, {inst.y:F0})";
                 if (ImGui.Selectable(label, state.SelectedIndex == i))
                 {
                     state.SelectedIndex = i;
-                    state.InstSpriteName = inst.spriteName;
+                    state.InstTextureName = inst.assetId;
                     state.InstX = (int)inst.x;
                     state.InstY = (int)inst.y;
                 }
@@ -438,9 +474,9 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 
             if (state.SelectedIndex >= 0 && state.SelectedIndex < state.Instances.Count)
             {
-                ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0.8f, 1f), "Edit Instance");
+                ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0.8f, 1f), "Edit Selected Entity");
 
-                DrawSpriteComboBox(availableSprites, ref state.InstSpriteName, absolutePath);
+                DrawTextureComboBox(availableTextures, ref state.InstTextureName, absolutePath);
 
                 ImGui.SetNextItemWidth(-1);
                 ImGui.InputInt("Position X", ref state.InstX);
@@ -450,91 +486,258 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 float spacing = ImGui.GetStyle().ItemSpacing.X;
                 float halfWidth = (ImGui.GetContentRegionAvail().X - spacing) / 2;
 
-                if (ImGui.Button("Update Instance", new System.Numerics.Vector2(halfWidth, 30)))
+                if (ImGui.Button("Update Pos", new System.Numerics.Vector2(halfWidth, 30)))
                 {
                     var inst = state.Instances[state.SelectedIndex];
-                    inst.spriteName = state.InstSpriteName;
+                    inst.assetId = state.InstTextureName;
                     inst.x = state.InstX;
                     inst.y = state.InstY;
-                    GlobalState.Log($"Updated instance {state.SelectedIndex} to ({state.InstX}, {state.InstY}).");
+                    GlobalState.Log($"Updated entity {state.SelectedIndex} properties.");
                 }
                 
                 ImGui.SameLine();
-                if (ImGui.Button("Remove Instance", new System.Numerics.Vector2(halfWidth, 30)))
+                if (ImGui.Button("Delete Entity", new System.Numerics.Vector2(halfWidth, 30)))
                 {
                     state.Instances.RemoveAt(state.SelectedIndex);
-                    GlobalState.Log($"Removed instance {state.SelectedIndex}.");
+                    GlobalState.Log($"Removed entity {state.SelectedIndex}.");
                     state.SelectedIndex = -1;
                 }
             }
             else
             {
-                ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0f, 1f), "Add New Instance");
+                ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0f, 1f), "Add New Entity");
 
-                if (string.IsNullOrEmpty(state.InstSpriteName) && availableSprites.Count > 0)
+                if (string.IsNullOrEmpty(state.InstTextureName) && availableTextures.Count > 0)
                 {
-                    state.InstSpriteName = availableSprites[0];
+                    state.InstTextureName = availableTextures[0];
                 }
 
-                DrawSpriteComboBox(availableSprites, ref state.InstSpriteName, absolutePath);
+                DrawTextureComboBox(availableTextures, ref state.InstTextureName, absolutePath);
 
                 ImGui.SetNextItemWidth(-1);
                 ImGui.InputInt("Position X", ref state.InstX);
                 ImGui.SetNextItemWidth(-1);
                 ImGui.InputInt("Position Y", ref state.InstY);
 
-                if (ImGui.Button("Add Instance", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                if (ImGui.Button("Add Entity", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
-                    if (string.IsNullOrEmpty(state.InstSpriteName))
+                    if (string.IsNullOrEmpty(state.InstTextureName))
                     {
-                        GlobalState.Log("Error: Add a sprite to the project first.");
+                        GlobalState.Log("Error: Add a texture to the project first.");
                     }
                     else
                     {
-                        state.Instances.Add(new RoomSerializer.RoomInstance
+                        state.Instances.Add(new SceneSerializer.EntityInstance
                         {
-                            spriteName = state.InstSpriteName,
+                            assetId = state.InstTextureName,
                             x = state.InstX,
                             y = state.InstY
                         });
-                        GlobalState.Log($"Added instance of '{state.InstSpriteName}' at ({state.InstX}, {state.InstY}).");
+                        GlobalState.Log($"Added entity '{state.InstTextureName}' at ({state.InstX}, {state.InstY}).");
                     }
                 }
             }
 
             ImGui.Dummy(new System.Numerics.Vector2(0, 10));
-            if (ImGui.Button("Save Room Configuration", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 35)))
+            if (ImGui.Button("Save Scene Configuration", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 35)))
             {
-                bool success = RoomSerializer.SaveRoomPath(absolutePath, state.Instances, GlobalState.Log);
+                bool success = SceneSerializer.SaveScenePath(absolutePath, state.Instances, GlobalState.Log);
                 if (success)
                 {
-                    GlobalState.Log($"Successfully saved room layout file: {Path.GetFileName(absolutePath)}");
+                    GlobalState.Log($"Successfully saved scene layout file: {Path.GetFileName(absolutePath)}");
                 }
             }
+
+            // --- COLUMN 2: Visual Viewport ---
+            ImGui.NextColumn();
+
+            System.Numerics.Vector2 canvasSize = ImGui.GetContentRegionAvail() - new System.Numerics.Vector2(0, 40);
+            if (canvasSize.X < 100) canvasSize.X = 100;
+            if (canvasSize.Y < 100) canvasSize.Y = 100;
+
+            // Handle RenderTarget recreation upon resize
+            int desiredW = (int)canvasSize.X;
+            int desiredH = (int)canvasSize.Y;
+            if (desiredW < 100) desiredW = 100;
+            if (desiredH < 100) desiredH = 100;
+
+            if (state.RenderTarget == null || state.RenderTarget.Width != desiredW || state.RenderTarget.Height != desiredH)
+            {
+                if (state.RenderTargetId != IntPtr.Zero)
+                {
+                    TextureCache.UnbindRenderTarget(state.RenderTargetId);
+                }
+                state.RenderTarget?.Dispose();
+
+                state.RenderTarget = new RenderTarget2D(GlobalState.GraphicsDevice!, desiredW, desiredH);
+                state.RenderTargetId = TextureCache.BindRenderTarget(state.RenderTarget);
+            }
+
+            // Draw to Render Target
+            var oldTargets = GlobalState.GraphicsDevice!.GetRenderTargets();
+            GlobalState.GraphicsDevice.SetRenderTarget(state.RenderTarget);
+            GlobalState.GraphicsDevice.Clear(Color.CornflowerBlue);
+
+            state.SpriteBatch!.Begin();
+
+            foreach (var inst in state.Instances)
+            {
+                string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".png");
+                if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpg");
+                if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpeg");
+
+                Texture2D? texture = TextureCache.GetTexture(texPath);
+                
+                // Scale coordinates from backing 1280x720 coordinates to actual viewport display size
+                float drawX = (inst.x / 1280f) * desiredW;
+                float drawY = (inst.y / 720f) * desiredH;
+
+                if (texture != null)
+                {
+                    float drawW = (texture.Width / 1280f) * desiredW;
+                    float drawH = (texture.Height / 720f) * desiredH;
+                    state.SpriteBatch.Draw(texture, new Rectangle((int)drawX, (int)drawY, (int)drawW, (int)drawH), Color.White);
+                }
+                else
+                {
+                    float drawW = (64f / 1280f) * desiredW;
+                    float drawH = (64f / 720f) * desiredH;
+                    state.SpriteBatch.Draw(state.FallbackTexture, new Rectangle((int)drawX, (int)drawY, (int)drawW, (int)drawH), Color.White);
+                }
+            }
+
+            state.SpriteBatch.End();
+            GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
+
+            // Canvas drawing & pointer calculations
+            System.Numerics.Vector2 canvasPos = ImGui.GetCursorScreenPos();
+            ImGui.ImageButton($"ViewportCanvas##{absolutePath}", state.RenderTargetId, canvasSize, System.Numerics.Vector2.Zero, System.Numerics.Vector2.One);
+
+            // Handle selecting via viewport click
+            if (ImGui.IsItemHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+            {
+                System.Numerics.Vector2 mousePos = ImGui.GetMousePos();
+                float localX = mousePos.X - canvasPos.X;
+                float localY = mousePos.Y - canvasPos.Y;
+                
+                float scaledX = (localX / canvasSize.X) * 1280f;
+                float scaledY = (localY / canvasSize.Y) * 720f;
+
+                int clickedIndex = -1;
+                for (int i = state.Instances.Count - 1; i >= 0; i--)
+                {
+                    var inst = state.Instances[i];
+                    float w = 64f;
+                    float h = 64f;
+
+                    string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".png");
+                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpg");
+                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpeg");
+
+                    Texture2D? texture = TextureCache.GetTexture(texPath);
+                    if (texture != null)
+                    {
+                        w = texture.Width;
+                        h = texture.Height;
+                    }
+
+                    if (scaledX >= inst.x && scaledX <= inst.x + w &&
+                        scaledY >= inst.y && scaledY <= inst.y + h)
+                    {
+                        clickedIndex = i;
+                        break;
+                    }
+                }
+
+                state.SelectedIndex = clickedIndex;
+                if (clickedIndex >= 0)
+                {
+                    var inst = state.Instances[clickedIndex];
+                    state.InstTextureName = inst.assetId;
+                    state.InstX = (int)inst.x;
+                    state.InstY = (int)inst.y;
+                }
+            }
+
+            // Handle entity dragging in real-time
+            if (state.SelectedIndex >= 0 && state.SelectedIndex < state.Instances.Count)
+            {
+                if (ImGui.IsItemActive() && ImGui.IsMouseDragging(ImGuiMouseButton.Left))
+                {
+                    System.Numerics.Vector2 dragDelta = ImGui.GetIO().MouseDelta;
+                    float scaleX = 1280f / canvasSize.X;
+                    float scaleY = 720f / canvasSize.Y;
+
+                    var inst = state.Instances[state.SelectedIndex];
+                    inst.x += dragDelta.X * scaleX;
+                    inst.y += dragDelta.Y * scaleY;
+
+                    state.InstX = (int)inst.x;
+                    state.InstY = (int)inst.y;
+                }
+            }
+
+            // Handle Drag & Drop DropTarget
+            if (ImGui.BeginDragDropTarget())
+            {
+                var payload = ImGui.AcceptDragDropPayload("EXPLORER_ASSET");
+                unsafe
+                {
+                    if (payload.NativePtr != null)
+                    {
+                        byte[] data = new byte[payload.DataSize];
+                        System.Runtime.InteropServices.Marshal.Copy((IntPtr)payload.Data, data, 0, payload.DataSize);
+                        string draggedPath = System.Text.Encoding.UTF8.GetString(data);
+
+                        if (draggedPath.StartsWith("Content/Textures/"))
+                        {
+                            string assetId = Path.GetFileNameWithoutExtension(draggedPath);
+                            
+                            System.Numerics.Vector2 mousePos = ImGui.GetMousePos();
+                            float localX = mousePos.X - canvasPos.X;
+                            float localY = mousePos.Y - canvasPos.Y;
+
+                            float scaledX = (localX / canvasSize.X) * 1280f;
+                            float scaledY = (localY / canvasSize.Y) * 720f;
+
+                            state.Instances.Add(new SceneSerializer.EntityInstance
+                            {
+                                assetId = assetId,
+                                x = scaledX,
+                                y = scaledY
+                            });
+                            GlobalState.Log($"Dropped '{assetId}' onto scene at ({scaledX:F0}, {scaledY:F0})");
+                        }
+                    }
+                }
+                ImGui.EndDragDropTarget();
+            }
+
+            ImGui.Columns(1);
         }
 
-        private static void DrawSpriteComboBox(List<string> availableSprites, ref string selectedSpriteName, string absolutePath)
+        private static void DrawTextureComboBox(List<string> availableTextures, ref string selectedTextureName, string absolutePath)
         {
-            if (availableSprites.Count == 0)
+            if (availableTextures.Count == 0)
             {
-                ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.3f, 0.3f, 1f), "No sprites available in project!");
+                ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.3f, 0.3f, 1f), "No textures available in project!");
                 return;
             }
 
-            if (!availableSprites.Contains(selectedSpriteName))
+            if (!availableTextures.Contains(selectedTextureName))
             {
-                selectedSpriteName = availableSprites[0];
+                selectedTextureName = availableTextures[0];
             }
 
             ImGui.SetNextItemWidth(-1);
-            if (ImGui.BeginCombo($"##SpriteCombo_{absolutePath}", selectedSpriteName))
+            if (ImGui.BeginCombo($"##TextureCombo_{absolutePath}", selectedTextureName))
             {
-                foreach (var sprite in availableSprites)
+                foreach (var tex in availableTextures)
                 {
-                    bool isSelected = (selectedSpriteName == sprite);
-                    if (ImGui.Selectable(sprite, isSelected))
+                    bool isSelected = (selectedTextureName == tex);
+                    if (ImGui.Selectable(tex, isSelected))
                     {
-                        selectedSpriteName = sprite;
+                        selectedTextureName = tex;
                     }
                     if (isSelected)
                     {

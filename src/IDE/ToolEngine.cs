@@ -57,6 +57,7 @@ namespace MonoGameMaker.IDE
             // Enable docking
             ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
 
+            GlobalState.GraphicsDevice = GraphicsDevice;
             // Initialize preview texture cache
             TextureCache.Initialize(GraphicsDevice, _imGuiRenderer);
 
@@ -573,13 +574,18 @@ namespace MonoGameMaker.IDE
                 {
                     if (extension == ".png" || extension == ".jpg" || extension == ".jpeg")
                     {
-                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Sprites", GlobalState.Log);
-                        if (success) GlobalState.Log($"Successfully imported sprite: {fileName}");
+                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Textures", GlobalState.Log);
+                        if (success) GlobalState.Log($"Successfully imported texture: {fileName}");
                     }
                     else if (extension == ".wav" || extension == ".mp3")
                     {
-                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Sounds", GlobalState.Log);
-                        if (success) GlobalState.Log($"Successfully imported sound: {fileName}");
+                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Audio", GlobalState.Log);
+                        if (success) GlobalState.Log($"Successfully imported audio: {fileName}");
+                    }
+                    else if (extension == ".fbx" || extension == ".obj")
+                    {
+                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Models", GlobalState.Log);
+                        if (success) GlobalState.Log($"Successfully imported model: {fileName}");
                     }
                     else if (extension == ".cs")
                     {
@@ -591,11 +597,11 @@ namespace MonoGameMaker.IDE
                     }
                     else if (extension == ".json")
                     {
-                        string destDir = Path.Combine(GlobalState.CurrentProjectPath, "Content", "Rooms");
+                        string destDir = Path.Combine(GlobalState.CurrentProjectPath, "Content", "Scenes");
                         if (!Directory.Exists(destDir)) Directory.CreateDirectory(destDir);
                         string destPath = Path.Combine(destDir, fileName);
                         File.Copy(filePath, destPath, overwrite: true);
-                        GlobalState.Log($"Successfully copied room layout: {fileName}");
+                        GlobalState.Log($"Successfully copied scene layout: {fileName}");
                     }
                     else
                     {

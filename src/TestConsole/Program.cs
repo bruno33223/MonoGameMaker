@@ -42,7 +42,7 @@ namespace TestConsole
             }
 
             // Verify folder structure
-            string[] expectedDirs = new[] { "Content/Sprites", "Content/Backgrounds", "Content/Sounds", "Content/Rooms", "Scripts", "Runtime" };
+            string[] expectedDirs = new[] { "Content/Textures", "Content/Audio", "Content/Models", "Content/Scenes", "Scripts", "Runtime" };
             foreach (var dir in expectedDirs)
             {
                 string path = Path.Combine(projectDir, dir);
@@ -81,7 +81,7 @@ namespace TestConsole
 
             // Register asset
             Console.WriteLine("Registering mock sprite in asset pipeline...");
-            bool registerSuccess = AssetPipelineSynchronizer.RegisterAsset(projectDir, mockSpritePath, "Sprites", Console.WriteLine);
+            bool registerSuccess = AssetPipelineSynchronizer.RegisterAsset(projectDir, mockSpritePath, "Textures", Console.WriteLine);
             if (!registerSuccess)
             {
                 Console.WriteLine("TEST FAILED: Asset pipeline registration failed.");
@@ -89,7 +89,7 @@ namespace TestConsole
             }
 
             // Verify copied file and MGCB entries
-            string destSpritePath = Path.Combine(projectDir, "Content", "Sprites", "mock_sprite.png");
+            string destSpritePath = Path.Combine(projectDir, "Content", "Textures", "mock_sprite.png");
             if (!File.Exists(destSpritePath))
             {
                 Console.WriteLine("TEST FAILED: Asset file was not copied physically.");
@@ -98,38 +98,38 @@ namespace TestConsole
 
             string mgcbPath = Path.Combine(projectDir, "Content", "Content.mgcb");
             string mgcbContent = File.ReadAllText(mgcbPath);
-            if (!mgcbContent.Contains("Sprites/mock_sprite.png"))
+            if (!mgcbContent.Contains("Textures/mock_sprite.png"))
             {
                 Console.WriteLine("TEST FAILED: MGCB registration entry not found in Content.mgcb.");
                 Environment.Exit(1);
             }
             Console.WriteLine("TEST PASSED: Sprite registered and synchronized successfully.");
 
-            // 3. Serialize Room Configuration
-            Console.WriteLine("\n[TEST 3] Generating room_init.json...");
-            var instances = new List<RoomSerializer.RoomInstance>
+            // 3. Serialize Scene Configuration
+            Console.WriteLine("\n[TEST 3] Generating scene_init.json...");
+            var instances = new List<SceneSerializer.EntityInstance>
             {
-                new RoomSerializer.RoomInstance { spriteName = "mock_sprite", x = 150, y = 200 },
-                new RoomSerializer.RoomInstance { spriteName = "mock_sprite", x = 400, y = 350 }
+                new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 150, y = 200 },
+                new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 400, y = 350 }
             };
 
-            bool serializeSuccess = RoomSerializer.SaveRoom(projectDir, instances, Console.WriteLine);
+            bool serializeSuccess = SceneSerializer.SaveScene(projectDir, instances, Console.WriteLine);
             if (!serializeSuccess)
             {
-                Console.WriteLine("TEST FAILED: Room serialization failed.");
+                Console.WriteLine("TEST FAILED: Scene serialization failed.");
                 Environment.Exit(1);
             }
 
-            string roomJsonPath = Path.Combine(projectDir, "Content", "Rooms", "room_init.json");
-            if (!File.Exists(roomJsonPath))
+            string sceneJsonPath = Path.Combine(projectDir, "Content", "Scenes", "scene_init.json");
+            if (!File.Exists(sceneJsonPath))
             {
-                Console.WriteLine("TEST FAILED: room_init.json file does not exist.");
+                Console.WriteLine("TEST FAILED: scene_init.json file does not exist.");
                 Environment.Exit(1);
             }
 
-            string jsonContent = File.ReadAllText(roomJsonPath);
+            string jsonContent = File.ReadAllText(sceneJsonPath);
             Console.WriteLine($"Serialized JSON content:\n{jsonContent}");
-            Console.WriteLine("TEST PASSED: Room serialized successfully.");
+            Console.WriteLine("TEST PASSED: Scene serialized successfully.");
 
             // 4. Try building the generated project
             Console.WriteLine("\n[TEST 4] Compiling generated project to verify all boilerplate compiles...");

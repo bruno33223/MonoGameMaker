@@ -1,3 +1,5 @@
+using System;
+using System.Runtime.InteropServices;
 using ImGuiNET;
 using System.IO;
 using MonoGameMaker.IDE.Core;
@@ -55,6 +57,23 @@ namespace MonoGameMaker.IDE.Windows
                 }
 
                 ImGui.TreeNodeEx(node.Name, flags);
+
+                if (ImGui.BeginDragDropSource())
+                {
+                    byte[] pathBytes = System.Text.Encoding.UTF8.GetBytes(relativePath);
+                    GCHandle handle = GCHandle.Alloc(pathBytes, GCHandleType.Pinned);
+                    try
+                    {
+                        IntPtr ptr = handle.AddrOfPinnedObject();
+                        ImGui.SetDragDropPayload("EXPLORER_ASSET", ptr, (uint)pathBytes.Length);
+                    }
+                    finally
+                    {
+                        handle.Free();
+                    }
+                    ImGui.Text(node.Name);
+                    ImGui.EndDragDropSource();
+                }
                 
                 if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 {
