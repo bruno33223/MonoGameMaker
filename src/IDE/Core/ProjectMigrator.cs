@@ -37,6 +37,9 @@ namespace MonoGameMaker.IDE
                 // Migrate Game1.cs to use SafeContentManager
                 MigrateGame1(projectRoot, logCallback);
 
+                // Sanitize and repair corrupted spritefonts
+                SanitizeSpriteFonts(projectRoot, logCallback);
+
                 // Migrate legacy scripts
                 MigrateScripts(projectRoot, logCallback);
 
@@ -297,6 +300,63 @@ namespace MonoGameMaker.IDE
             catch (Exception ex)
             {
                 logCallback($"Migration Error: Failed to migrate Game1.cs: {ex.Message}");
+            }
+        }
+
+        private static void SanitizeSpriteFonts(string projectRoot, Action<string> logCallback)
+        {
+            try
+            {
+                string contentDir = Path.Combine(projectRoot, "Content");
+                if (!Directory.Exists(contentDir)) return;
+
+                string[] spriteFontFiles = Directory.GetFiles(contentDir, "*.spritefont", SearchOption.AllDirectories);
+                foreach (string file in spriteFontFiles)
+                {
+                    try
+                    {
+                        string xml = File.ReadAllText(file);
+                        bool modified = false;
+
+                        // Repair <Start> tag if it contains literal space or is empty/whitespace
+                        var startMatch = Regex.Match(xml, @"<Start>(.*?)</Start>");
+                        if (startMatch.Success)
+                        {
+                            string val = startMatch.Groups[1].Value;
+                            if (string.IsNullOrWhiteSpace(val) || val == " ")
+                            {
+                                xml = Regex.Replace(xml, @"<Start>.*?</Start>", "<Start>&#32;</Start>");
+                                modified = true;
+                            }
+                        }
+
+                        // Repair <End> tag if it is empty/whitespace
+                        var endMatch = Regex.Match(xml, @"<End>(.*?)</End>");
+                        if (endMatch.Success)
+                        {
+                            string val = endMatch.Groups[1].Value;
+                            if (string.IsNullOrWhiteSpace(val))
+                            {
+                                xml = Regex.Replace(xml, @"<End>.*?</End>", "<End>&#126;</End>");
+                                modified = true;
+                            }
+                        }
+
+                        if (modified)
+                        {
+                            File.WriteAllText(file, xml);
+                            logCallback($"Migration: Sanitized and repaired corrupted spritefont XML: {Path.GetFileName(file)}");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logCallback($"Migration Warning: Failed to sanitize spritefont {Path.GetFileName(file)}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logCallback($"Migration Error: Failed to scan or sanitize spritefonts: {ex.Message}");
             }
         }
     }

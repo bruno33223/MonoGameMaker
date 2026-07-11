@@ -82,7 +82,9 @@ namespace MonoGameMaker.IDE.Windows
         private static int _compiledFontSize = 14;
         private static string _compiledFontStyle = "Regular";
 
-
+        private static string? _lastProjectPath;
+        private static Microsoft.Xna.Framework.Content.ContentManager? _simulationContentManager;
+        private static SimpleServiceProvider? _simulationServices;
         private static readonly string[] _commonFonts = new[]
         {
             "Arial",
@@ -1352,6 +1354,7 @@ namespace MonoGameMaker.IDE.Windows
                         {
                             try
                             {
+                                InitializeLoadedRuntimeSystems(GetSimulationContentManager(), state.SpriteBatch, state.FallbackTexture!);
                                 drawMethod.Invoke(null, new object[] { state.SpriteBatch, state.FallbackTexture });
                             }
                             catch (Exception ex)
@@ -1733,6 +1736,90 @@ namespace MonoGameMaker.IDE.Windows
                     }
                 }
                 ImGui.EndCombo();
+            }
+        }
+
+        private static Microsoft.Xna.Framework.Content.ContentManager GetSimulationContentManager()
+        {
+            if (_simulationContentManager == null || _lastProjectPath != GlobalState.CurrentProjectPath)
+            {
+                _lastProjectPath = GlobalState.CurrentProjectPath;
+                if (_simulationContentManager != null)
+                {
+                    _simulationContentManager.Unload();
+                    _simulationContentManager.Dispose();
+                }
+                
+                _simulationServices = new SimpleServiceProvider();
+                string contentDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "bin", "DesktopGL", "Content");
+                if (!Directory.Exists(contentDir))
+                {
+                    contentDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content");
+                }
+                _simulationContentManager = new Microsoft.Xna.Framework.Content.ContentManager(_simulationServices, contentDir);
+            }
+            return _simulationContentManager;
+        }
+
+        private static void InitializeLoadedRuntimeSystems(Microsoft.Xna.Framework.Content.ContentManager content, SpriteBatch spriteBatch, Texture2D fallbackPixel)
+        {
+            try
+            {
+                if (AssemblyReloader.LoadedAssembly == null) return;
+
+                // 1. Initialize SceneManager
+                Type? sceneManagerType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.SceneManager");
+                if (sceneManagerType != null)
+                {
+                    var methods = sceneManagerType.GetMethods(BindingFlags.Public | BindingFlags.Static);
+                    foreach (var m in methods)
+                    {
+                        if (m.Name == "Initialize")
+                        {
+                            var pars = m.GetParameters();
+                            if (pars.Length == 1 && pars[0].ParameterType.IsAssignableFrom(typeof(Microsoft.Xna.Framework.Content.ContentManager)))
+                            {
+                                m.Invoke(null, new object[] { content });
+                            }
+                            else if (pars.Length == 2 && pars[0].ParameterType.IsAssignableFrom(typeof(Microsoft.Xna.Framework.Content.ContentManager)) && pars[1].ParameterType == typeof(Action<string>))
+                            {
+                                m.Invoke(null, new object[] { content, new Action<string>(GlobalState.Log) });
+                            }
+                        }
+                    }
+                }
+
+                // 2. Initialize TextRenderer
+                Type? textRendererType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.TextRenderer");
+                if (textRendererType != null)
+                {
+                    var initMethod = textRendererType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);
+                    if (initMethod != null)
+                    {
+                        initMethod.Invoke(null, new object[] { content, spriteBatch, fallbackPixel });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                GlobalState.Log($"Warning: failed to initialize simulation runtime systems via reflection: {ex.Message}");
+            }
+        }
+
+        private class SimpleServiceProvider : IServiceProvider, IGraphicsDeviceService
+        {
+            public GraphicsDevice GraphicsDevice => GlobalState.GraphicsDevice!;
+
+            public event EventHandler<EventArgs>? DeviceCreated;
+            public event EventHandler<EventArgs>? DeviceDisposing;
+            public event EventHandler<EventArgs>? DeviceReset;
+            public event EventHandler<EventArgs>? DeviceResetting;
+
+            public object? GetService(Type serviceType)
+            {
+                if (serviceType == typeof(IGraphicsDeviceService))
+                    return this;
+                return null;
             }
         }
 
