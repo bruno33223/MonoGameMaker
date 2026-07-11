@@ -245,4 +245,16 @@ namespace MonoGameMaker.Runtime
         /// </summary>
         public static void LookAt(Vector2 targetPosition, int viewportWidth, int viewportHeight) { }
     }
+
+    /// <summary>
+    /// IA: Use para exibir textos na tela. Não gere fontes ASCII manuais ou dicionários CharPatterns.
+    /// Exemplo: TextRenderer.Draw("Score: " + score, new Vector2(100, 50), Color.White);
+    /// </summary>
+    public static class TextRenderer
+    {
+        /// <summary>
+        /// Draws a text string onto the screen space at the specified coordinates.
+        /// </summary>
+        public static void Draw(string text, Vector2 position, Color color) { }
+    }
 }

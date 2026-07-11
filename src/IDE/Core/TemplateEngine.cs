@@ -114,13 +114,38 @@ namespace MonoGameMaker.IDE.Core
                 string scenesPath = Path.Combine(contentPath, "Scenes");
                 string scriptsPath = Path.Combine(targetDirectory, "Scripts");
                 string prefabsPath = Path.Combine(targetDirectory, "Prefabs");
+                string fontsPath = Path.Combine(contentPath, "Fonts");
 
                 Directory.CreateDirectory(texturesPath);
                 Directory.CreateDirectory(audioPath);
                 Directory.CreateDirectory(modelsPath);
                 Directory.CreateDirectory(scenesPath);
+                Directory.CreateDirectory(fontsPath);
                 Directory.CreateDirectory(scriptsPath);
                 Directory.CreateDirectory(prefabsPath);
+
+                // Create default font file
+                string defaultFontPath = Path.Combine(fontsPath, "default.spritefont");
+                File.WriteAllText(defaultFontPath, GetDefaultSpriteFontCode());
+
+                // Register the default font in Content.mgcb
+                string mgcbPath = Path.Combine(contentPath, "Content.mgcb");
+                if (File.Exists(mgcbPath))
+                {
+                    string mgcbContent = File.ReadAllText(mgcbPath);
+                    if (!mgcbContent.Contains("Fonts/default.spritefont"))
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        sb.AppendLine();
+                        sb.AppendLine("#begin Fonts/default.spritefont");
+                        sb.AppendLine("/importer:FontDescriptionImporter");
+                        sb.AppendLine("/processor:FontDescriptionProcessor");
+                        sb.AppendLine("/build:Fonts/default.spritefont");
+                        sb.AppendLine("#end Fonts/default.spritefont");
+                        sb.AppendLine();
+                        File.WriteAllText(mgcbPath, mgcbContent + sb.ToString());
+                    }
+                }
 
                 // 5. Create default scene_init.json
                 string sceneInitPath = Path.Combine(scenesPath, "scene_init.json");
@@ -157,6 +182,9 @@ namespace MonoGameMaker.IDE.Core
 
                 string camera2DPath = Path.Combine(runtimeDir, "Camera2D.cs");
                 File.WriteAllText(camera2DPath, GetCamera2DCode());
+
+                string textRendererPath = Path.Combine(runtimeDir, "TextRenderer.cs");
+                File.WriteAllText(textRendererPath, GetTextRendererCode());
 
                 // 7. Inject Game1.cs
                 logCallback("Injecting customized Game1 boilerplate...");
@@ -1054,6 +1082,7 @@ namespace {projectName}
             _defaultTexture.SetData(new[] {{ Color.Magenta }});
 
             SceneManager.Initialize(Content);
+            TextRenderer.Initialize(Content, _spriteBatch, _defaultTexture);
             SceneManager.LoadScene(""scene_init"");
         }}
 
@@ -1170,11 +1199,112 @@ namespace {projectName}.Scripts
                 SafeWriteAllText(Path.Combine(runtimeDir, "GameState.cs"), GetGameStateCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "SceneManager.cs"), GetSceneManagerCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "Camera2D.cs"), GetCamera2DCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "TextRenderer.cs"), GetTextRendererCode());
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error syncing runtime files: {ex.Message}");
             }
+        }
+
+        private static string GetTextRendererCode()
+        {
+            return @"using System;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
+using Microsoft.Xna.Framework.Graphics;
+
+namespace MonoGameMaker.Runtime
+{
+    /// <summary>
+    /// IA: Use para exibir textos na tela. Não gere fontes ASCII manuais ou dicionários CharPatterns.
+    /// Exemplo: TextRenderer.Draw(""Score: "" + score, new Vector2(100, 50), Color.White);
+    /// </summary>
+    public static class TextRenderer
+    {
+        private static ContentManager _content;
+        private static SpriteBatch _spriteBatch;
+        private static SpriteFont _spriteFont;
+        private static Texture2D _pixel;
+
+        public static void Initialize(ContentManager content, SpriteBatch spriteBatch, Texture2D fallbackPixel)
+        {
+            _content = content;
+            _spriteBatch = spriteBatch;
+            _pixel = fallbackPixel;
+
+            try
+            {
+                // Tries to load default spritefont from Fonts directory
+                _spriteFont = _content.Load<SpriteFont>(""Fonts/default"");
+            }
+            catch
+            {
+                try
+                {
+                    // Fallback to root Content directory
+                    _spriteFont = _content.Load<SpriteFont>(""default"");
+                }
+                catch
+                {
+                    // Fallback: Default font not found, will use manual draw
+                    _spriteFont = null;
+                }
+            }
+        }
+
+        public static void Draw(string text, Vector2 position, Color color)
+        {
+            if (_spriteBatch == null) return;
+
+            if (_spriteFont != null)
+            {
+                _spriteBatch.DrawString(_spriteFont, text, position, color);
+            }
+            else
+            {
+                // Draw a simple debug placeholder blocks per char to avoid crash
+                float currentX = position.X;
+                foreach (char c in text)
+                {
+                    if (c == ' ')
+                    {
+                        currentX += 8;
+                    }
+                    else
+                    {
+                        if (_pixel != null)
+                        {
+                            _spriteBatch.Draw(_pixel, new Rectangle((int)currentX, (int)position.Y, 6, 10), color);
+                        }
+                        currentX += 8;
+                    }
+                }
+            }
+        }
+    }
+}
+";
+        }
+
+        public static string GetDefaultSpriteFontCode()
+        {
+            return @"<?xml version=""1.0"" encoding=""utf-8""?>
+<XnaContent xmlns:Graphics=""Microsoft.Xna.Framework.Content.Pipeline.Graphics"">
+  <Asset Type=""Graphics:FontDescription"">
+    <FontName>Arial</FontName>
+    <Size>14</Size>
+    <Spacing>0</Spacing>
+    <UseKerning>true</UseKerning>
+    <Style>Regular</Style>
+    <CharacterRegions>
+      <CharacterRegion>
+        <Start>&#32;</Start>
+        <End>&#126;</End>
+      </CharacterRegion>
+    </CharacterRegions>
+  </Asset>
+</XnaContent>";
         }
 
         private static string GetAiManifestTemplate(string projectName)

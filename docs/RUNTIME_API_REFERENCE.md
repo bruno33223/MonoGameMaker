@@ -14,6 +14,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`GameState`** | Global persistent storage (`Set`, `Get`) and type conversion fallbacks | **[GameState Manual](runtime/GameState.md)** |
 | **`Camera2D`** | Camera translation matrix calculation (`Transform`) and boundaries clamping (`LookAt`) | **[Camera2D Manual](runtime/Camera2D.md)** |
 | **`SceneManager`** | Synchronous level loading (`LoadScene`) and Content boots | **[SceneManager Manual](runtime/SceneManager.md)** |
+| **`TextRenderer`** | Static global text rendering and UI space printing | **[TextRenderer Manual](runtime/TextRenderer.md)** |
 
 ---
 

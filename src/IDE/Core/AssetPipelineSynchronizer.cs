@@ -42,6 +42,7 @@ namespace MonoGameMaker.IDE.Core
                         "sprites" or "backgrounds" or "textures" => "Textures",
                         "sounds" or "audio" => "Audio",
                         "models" => "Models",
+                        "fonts" => "Fonts",
                         _ => throw new ArgumentException($"Unknown asset type: {assetType}")
                     };
 
@@ -98,6 +99,11 @@ namespace MonoGameMaker.IDE.Core
                     {
                         importer = "ModelImporter";
                         processor = "ModelProcessor";
+                    }
+                    else if (normalizedType == "Fonts" || ext == ".spritefont")
+                    {
+                        importer = "FontDescriptionImporter";
+                        processor = "FontDescriptionProcessor";
                     }
 
                     // Relative path inside Content/ for MGCB
