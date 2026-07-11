@@ -1015,6 +1015,9 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         ImGui.EndTabItem();
                     }
 
+                    // Inspector tab: shows selected entity transform, custom props and components
+                    InspectorWindow.DrawAsTab(absolutePath);
+
                     ImGui.EndTabBar();
                 }
 

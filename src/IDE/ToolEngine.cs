@@ -200,7 +200,6 @@ namespace MonoGameMaker.IDE
             ToolbarWindow();
             ProjectExplorer.Draw();
             ResourceEditors.DrawPropertiesWindow();
-            InspectorWindow.Draw();
             ResourceEditors.DrawDocumentWindows();
             ConsoleLogsWindow();
 
