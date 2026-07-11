@@ -137,6 +137,9 @@ namespace MonoGameMaker.IDE.Core
                 string sceneLoaderPath = Path.Combine(runtimeDir, "SceneLoader.cs");
                 File.WriteAllText(sceneLoaderPath, GetSceneLoaderCode());
 
+                string entityManagerPath = Path.Combine(runtimeDir, "EntityManager.cs");
+                File.WriteAllText(entityManagerPath, GetEntityManagerCode());
+
                 // 7. Inject Game1.cs
                 logCallback("Injecting customized Game1 boilerplate...");
                 string game1Path = Path.Combine(targetDirectory, "Game1.cs");
@@ -357,7 +360,8 @@ namespace MonoGameMaker.Runtime
                                 PrefabName = inst.prefabName,
                                 Texture = texture,
                                 Position = new Vector2(inst.x, inst.y),
-                                Script = scriptInstance
+                                Script = scriptInstance,
+                                Tag = instPrefab.Tag ?? ""Default""
                             };
 
                             if (scriptInstance != null)
@@ -420,6 +424,219 @@ namespace MonoGameMaker.Runtime
         public Texture2D Texture { get; set; }
         public Vector2 Position { get; set; }
         public IEntityScript Script { get; set; }
+        public string Tag { get; set; } = ""Default"";
+        public bool IsDestroyed { get; set; } = false;
+        public Rectangle Bounds => Texture != null 
+            ? new Rectangle((int)Position.X, (int)Position.Y, Texture.Width, Texture.Height) 
+            : new Rectangle((int)Position.X, (int)Position.Y, 64, 64);
+    }
+}
+";
+        }
+
+        private static string GetEntityManagerCode()
+        {
+            return @"using System;
+using System.Collections.Generic;
+using System.IO;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Content;
+using Microsoft.Xna.Framework.Graphics;
+
+namespace MonoGameMaker.Runtime
+{
+    public static class EntityManager
+    {
+        public static List<GameEntity> Entities = new List<GameEntity>();
+        private static List<GameEntity> _entitiesToAdd = new List<GameEntity>();
+        
+        public static ContentManager Content { get; set; }
+
+        public static GameEntity Spawn(string prefabName, Vector2 position)
+        {
+            if (prefabName.EndsWith("".prefab"", StringComparison.OrdinalIgnoreCase))
+            {
+                prefabName = Path.GetFileNameWithoutExtension(prefabName);
+            }
+
+            string prefabPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ""Prefabs"", $""{prefabName}.prefab"");
+            if (!File.Exists(prefabPath))
+            {
+                prefabPath = Path.Combine(Directory.GetCurrentDirectory(), ""Prefabs"", $""{prefabName}.prefab"");
+            }
+
+            string textureName = """";
+            string scriptName = """";
+            string tag = ""Default"";
+            var instPrefab = new PrefabData();
+
+            if (File.Exists(prefabPath))
+            {
+                try
+                {
+                    string prefabJson = File.ReadAllText(prefabPath);
+                    var prefabData = System.Text.Json.JsonSerializer.Deserialize<PrefabData>(prefabJson);
+                    if (prefabData != null)
+                    {
+                        instPrefab = prefabData;
+                        textureName = prefabData.TextureName;
+                        scriptName = prefabData.ScriptName;
+                        tag = prefabData.Tag;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($""Error loading prefab data: {ex.Message}"");
+                }
+            }
+
+            Texture2D texture = null;
+            if (!string.IsNullOrEmpty(textureName) && Content != null)
+            {
+                try
+                {
+                    string assetPath = ""Textures/"" + textureName;
+                    if (assetPath.EndsWith("".png"") || assetPath.EndsWith("".jpg"") || assetPath.EndsWith("".jpeg""))
+                    {
+                        assetPath = assetPath.Substring(0, assetPath.LastIndexOf('.'));
+                    }
+                    texture = Content.Load<Texture2D>(assetPath);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($""Error loading texture {textureName}: {ex.Message}"");
+                }
+            }
+
+            IEntityScript scriptInstance = null;
+            if (!string.IsNullOrEmpty(scriptName))
+            {
+                try
+                {
+                    Type scriptType = null;
+                    foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                    {
+                        var t = assembly.GetType(scriptName);
+                        if (t == null)
+                        {
+                            t = assembly.GetType(assembly.GetName().Name + ""."" + scriptName);
+                        }
+                        if (t == null)
+                        {
+                            t = assembly.GetType(assembly.GetName().Name + "".Scripts."" + scriptName);
+                        }
+                        if (t != null)
+                        {
+                            scriptType = t;
+                            break;
+                        }
+                    }
+
+                    if (scriptType != null && typeof(IEntityScript).IsAssignableFrom(scriptType))
+                    {
+                        scriptInstance = (IEntityScript)Activator.CreateInstance(scriptType);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($""Error resolving script {scriptName}: {ex.Message}"");
+                }
+            }
+
+            var gameEntity = new GameEntity
+            {
+                PrefabName = prefabName,
+                Texture = texture,
+                Position = position,
+                Script = scriptInstance,
+                Tag = tag
+            };
+
+            if (scriptInstance != null)
+            {
+                try
+                {
+                    var prefabProps = new Dictionary<string, string>();
+                    if (instPrefab.CustomProperties != null)
+                    {
+                        prefabProps = instPrefab.CustomProperties;
+                    }
+                    scriptInstance.Initialize(gameEntity, prefabProps);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($""Error initializing script: {ex.Message}"");
+                }
+            }
+
+            _entitiesToAdd.Add(gameEntity);
+            return gameEntity;
+        }
+
+        public static void Destroy(GameEntity entity)
+        {
+            if (entity != null)
+            {
+                entity.IsDestroyed = true;
+            }
+        }
+
+        public static GameEntity GetFirstColliding(GameEntity caller, string targetTag)
+        {
+            if (caller == null) return null;
+            
+            foreach (var entity in Entities)
+            {
+                if (entity != caller && !entity.IsDestroyed && entity.Tag == targetTag)
+                {
+                    if (caller.Bounds.Intersects(entity.Bounds))
+                    {
+                        return entity;
+                    }
+                }
+            }
+            return null;
+        }
+
+        public static void Update(GameTime gameTime)
+        {
+            if (_entitiesToAdd.Count > 0)
+            {
+                Entities.AddRange(_entitiesToAdd);
+                _entitiesToAdd.Clear();
+            }
+
+            foreach (var entity in Entities)
+            {
+                if (!entity.IsDestroyed)
+                {
+                    entity.Script?.Update(gameTime);
+                }
+            }
+
+            Entities.RemoveAll(e => e.IsDestroyed);
+        }
+
+        public static void Draw(SpriteBatch spriteBatch, Texture2D defaultTexture)
+        {
+            foreach (var entity in Entities)
+            {
+                if (entity.IsDestroyed) continue;
+
+                if (entity.Script != null)
+                {
+                    entity.Script.Draw(spriteBatch);
+                }
+                else if (entity.Texture != null)
+                {
+                    spriteBatch.Draw(entity.Texture, entity.Position, Color.White);
+                }
+                else
+                {
+                    spriteBatch.Draw(defaultTexture, new Rectangle((int)entity.Position.X, (int)entity.Position.Y, 64, 64), Color.White);
+                }
+            }
+        }
     }
 }
 ";
@@ -430,7 +647,6 @@ namespace MonoGameMaker.Runtime
             return $@"using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
-using System.Collections.Generic;
 using System.IO;
 using MonoGameMaker.Runtime;
 
@@ -440,7 +656,6 @@ namespace {projectName}
     {{
         private GraphicsDeviceManager _graphics;
         private SpriteBatch _spriteBatch;
-        private List<GameEntity> _entities = new List<GameEntity>();
         private Texture2D _defaultTexture;
 
         public Game1()
@@ -465,8 +680,10 @@ namespace {projectName}
             _defaultTexture = new Texture2D(GraphicsDevice, 1, 1);
             _defaultTexture.SetData(new[] {{ Color.Magenta }});
 
+            EntityManager.Content = Content;
+
             string jsonPath = Path.Combine(""Scenes"", ""scene_init.json"");
-            _entities = SceneLoader.LoadScene(jsonPath, Content);
+            EntityManager.Entities = SceneLoader.LoadScene(jsonPath, Content);
         }}
 
         protected override void Update(GameTime gameTime)
@@ -474,10 +691,7 @@ namespace {projectName}
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
-            foreach (var entity in _entities)
-            {{
-                entity.Script?.Update(gameTime);
-            }}
+            EntityManager.Update(gameTime);
 
             base.Update(gameTime);
         }}
@@ -487,23 +701,7 @@ namespace {projectName}
             GraphicsDevice.Clear(Color.CornflowerBlue);
 
             _spriteBatch.Begin();
-
-            foreach (var entity in _entities)
-            {{
-                if (entity.Script != null)
-                {{
-                    entity.Script.Draw(_spriteBatch);
-                }}
-                else if (entity.Texture != null)
-                {{
-                    _spriteBatch.Draw(entity.Texture, entity.Position, Color.White);
-                }}
-                else
-                {{
-                    _spriteBatch.Draw(_defaultTexture, new Rectangle((int)entity.Position.X, (int)entity.Position.Y, 64, 64), Color.White);
-                }}
-            }}
-
+            EntityManager.Draw(_spriteBatch, _defaultTexture);
             _spriteBatch.End();
 
             base.Draw(gameTime);
@@ -532,7 +730,7 @@ You must adhere to the following architecture rules and constraints at all times
 - `Scripts/`: Holds pure C# script behavior classes implementing the `MonoGameMaker.Runtime.IEntityScript` interface.
 
 ## Hard Architectural Rules
-1. **NO Game1.cs Modifications**: Never modify `Game1.cs` to add custom gameplay logic or variables. It acts solely as the boilerplate engine bootstrap.
+1. **NO Game1.cs Modifications**: Never modify `Game1.cs` to add custom gameplay logic or variables. It acts solely as the boilerplate engine bootstrap. All entity lifecycle operations must use `EntityManager`.
 2. **NO Raw Texture Instancing**: Never instance a raw texture directly in `scene_init.json`. You MUST create a `.prefab` file inside the `Prefabs` directory that references the texture, and instance that prefab instead.
 3. **MGCB Asset Registry**: To add or use any texture or audio asset, place it in the appropriate folder and make sure it is registered in `Content/Content.mgcb` so the MonoGame Content Builder compiler can compile it.
 4. **Behavior Script Injection**: All gameplay behaviors must be implemented as scripts inheriting from `MonoGameMaker.Runtime.IEntityScript` inside the `Scripts/` folder, and then bound to an entity by entering the script class name in its `.prefab` file.
