@@ -319,25 +319,25 @@ namespace MonoGameMaker.IDE
                         bool modified = false;
 
                         // Repair <Start> tag if it contains literal space or is empty/whitespace
-                        var startMatch = Regex.Match(xml, @"<Start>(.*?)</Start>");
+                        var startMatch = Regex.Match(xml, @"<Start>([\s\S]*?)</Start>");
                         if (startMatch.Success)
                         {
                             string val = startMatch.Groups[1].Value;
                             if (string.IsNullOrWhiteSpace(val) || val == " ")
                             {
-                                xml = Regex.Replace(xml, @"<Start>.*?</Start>", "<Start>&#32;</Start>");
+                                xml = Regex.Replace(xml, @"<Start>[\s\S]*?</Start>", "<Start>&#32;</Start>");
                                 modified = true;
                             }
                         }
 
                         // Repair <End> tag if it is empty/whitespace
-                        var endMatch = Regex.Match(xml, @"<End>(.*?)</End>");
+                        var endMatch = Regex.Match(xml, @"<End>([\s\S]*?)</End>");
                         if (endMatch.Success)
                         {
                             string val = endMatch.Groups[1].Value;
                             if (string.IsNullOrWhiteSpace(val))
                             {
-                                xml = Regex.Replace(xml, @"<End>.*?</End>", "<End>&#126;</End>");
+                                xml = Regex.Replace(xml, @"<End>[\s\S]*?</End>", "<End>&#126;</End>");
                                 modified = true;
                             }
                         }
