@@ -20,3 +20,6 @@ This directory contains the detailed documentation manuals for each core class, 
 ## Shared Runtime Integration
 
 All classes listed above are compiled inside the core IDE library assembly under the namespace `MonoGameMaker.Runtime`. Scaffolded user game projects automatically reference these types, ensuring 100% API compatibility between editor viewport simulation and standalone game executables.
+
+### Doc-as-Code (IntelliSense/LLM Reference)
+- **[RUNTIME_SUMMARY.cs](file:///src/Runtime/Docs/RUNTIME_SUMMARY.cs)**: Clean C# signatures and extensive XML comments for all runtime modules, serving as an in-IDE IntelliSense dictionary and prompt context for code-writing LLMs.

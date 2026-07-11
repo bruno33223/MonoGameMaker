@@ -246,37 +246,7 @@ namespace MonoGameMaker.IDE.Windows
                         else
                         {
                             string cleanName = Path.GetFileNameWithoutExtension(scriptName);
-                            string template = $@"using System;
-using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
-using MonoGameMaker.Runtime;
-
-namespace {GlobalState.CurrentProjectName}.Scripts
-{{
-    public class {cleanName} : IEntityScript
-    {{
-        public void Initialize(GameEntity entity, System.Collections.Generic.Dictionary<string, string> properties)
-        {{
-            // Custom initialization behavior logic
-        }}
-
-        public void Update(GameTime gameTime)
-        {{
-            // Custom update behavior logic
-        }}
-
-        public void Draw(SpriteBatch spriteBatch)
-        {{
-            // Custom draw behavior logic (if needed, otherwise default texture draws)
-        }}
-
-        public void DrawUI(SpriteBatch spriteBatch)
-        {{
-            // Custom UI draw behavior logic (if needed)
-        }}
-    }}
-}}
-";
+                            string template = TemplateEngine.GetNewScriptTemplate(GlobalState.CurrentProjectName, cleanName);
                             File.WriteAllText(destPath, template);
                             GlobalState.Log($"Scaffolded new script: {scriptName}");
                             _newScriptName = "Script_" + (Directory.GetFiles(absolutePath, "*.cs").Length + 1);

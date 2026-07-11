@@ -1103,6 +1103,32 @@ namespace {projectName}
 ";
         }
 
+        public static string GetNewScriptTemplate(string projectName, string className)
+        {
+            return $@"// Referência de API: consulte src/Runtime/Docs/RUNTIME_SUMMARY.cs para exemplos de uso.
+using System;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using MonoGameMaker.Runtime;
+
+namespace {projectName}.Scripts
+{{
+    public class {className} : EntityBehavior
+    {{
+        public override void Awake()
+        {{
+            // Custom initialization behavior logic
+        }}
+
+        public override void Update(GameTime gameTime)
+        {{
+            // Custom update behavior logic
+        }}
+    }}
+}}
+";
+        }
+
         private static string GetAiManifestTemplate(string projectName)
         {
             return $@"# AI Architecture Manifest & Rules - {projectName}
