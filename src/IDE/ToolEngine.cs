@@ -36,6 +36,7 @@ namespace MonoGameMaker.IDE
         private bool _isFirstFrame = true;
         private bool _resetLayout;
         private int _layoutType;
+        private int _customCopyLines = 50;
 
         // Form fields
         private string _newProjectName = "MyGame";
@@ -540,6 +541,49 @@ namespace MonoGameMaker.IDE
             {
                 GlobalState.ClearLogs();
             }
+            ImGui.SameLine();
+            if (ImGui.Button("Copy Console"))
+            {
+                ImGui.OpenPopup("CopyConsolePopup");
+            }
+
+            if (ImGui.BeginPopup("CopyConsolePopup"))
+            {
+                if (ImGui.Selectable("Copy All"))
+                {
+                    CopyConsoleLines(-1);
+                    ImGui.CloseCurrentPopup();
+                }
+                if (ImGui.Selectable("Copy Last 50 Lines"))
+                {
+                    CopyConsoleLines(50);
+                    ImGui.CloseCurrentPopup();
+                }
+                if (ImGui.Selectable("Copy Last 100 Lines"))
+                {
+                    CopyConsoleLines(100);
+                    ImGui.CloseCurrentPopup();
+                }
+                if (ImGui.Selectable("Copy Last 500 Lines"))
+                {
+                    CopyConsoleLines(500);
+                    ImGui.CloseCurrentPopup();
+                }
+                
+                ImGui.Separator();
+                ImGui.Text("Custom number of lines:");
+                ImGui.SetNextItemWidth(100);
+                ImGui.InputInt("##CustomLinesInput", ref _customCopyLines);
+                if (_customCopyLines < 1) _customCopyLines = 1;
+                
+                if (ImGui.Button("Copy Custom"))
+                {
+                    CopyConsoleLines(_customCopyLines);
+                    ImGui.CloseCurrentPopup();
+                }
+                ImGui.EndPopup();
+            }
+
             ImGui.Separator();
 
             ImGui.BeginChild("LogScrollRegion", new System.Numerics.Vector2(0, 0), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
@@ -573,6 +617,31 @@ namespace MonoGameMaker.IDE
             }
             ImGui.EndChild();
             ImGui.End();
+        }
+
+        private void CopyConsoleLines(int count)
+        {
+            lock (GlobalState.ConsoleLogs)
+            {
+                if (GlobalState.ConsoleLogs.Count == 0) return;
+                
+                var linesToCopy = new List<string>();
+                if (count == -1 || count >= GlobalState.ConsoleLogs.Count)
+                {
+                    linesToCopy.AddRange(GlobalState.ConsoleLogs);
+                }
+                else
+                {
+                    int startIndex = GlobalState.ConsoleLogs.Count - count;
+                    for (int i = startIndex; i < GlobalState.ConsoleLogs.Count; i++)
+                    {
+                        linesToCopy.Add(GlobalState.ConsoleLogs[i]);
+                    }
+                }
+                
+                string text = string.Join(Environment.NewLine, linesToCopy);
+                ImGui.SetClipboardText(text);
+            }
         }
 
         private void DrawPopups()
