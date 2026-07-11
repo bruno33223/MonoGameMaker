@@ -9,9 +9,13 @@ namespace MonoGameMaker.IDE.Core
     {
         public class EntityInstance
         {
-            public string assetId { get; set; } = string.Empty;
+            public string prefabName { get; set; } = string.Empty;
             public float x { get; set; }
             public float y { get; set; }
+
+            // Backward compatibility properties
+            public string? assetId { get; set; }
+            public string? spriteName { get; set; }
         }
 
         public class SceneData
@@ -36,27 +40,35 @@ namespace MonoGameMaker.IDE.Core
                 if (File.Exists(jsonPath))
                 {
                     string jsonContent = File.ReadAllText(jsonPath);
-                    // Try parsing as the new SceneData structure first
+                    var options = new JsonSerializerOptions { IncludeFields = true };
+                    SceneData? data = null;
                     try
                     {
-                        var options = new JsonSerializerOptions { IncludeFields = true };
-                        var data = JsonSerializer.Deserialize<SceneData>(jsonContent, options);
-                        if (data != null && data.Instances != null)
-                        {
-                            return data;
-                        }
+                        data = JsonSerializer.Deserialize<SceneData>(jsonContent, options);
                     }
                     catch
                     {
-                        // Fallback: try parsing as legacy List<EntityInstance> array
-                        var legacyList = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent);
+                        var legacyList = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent, options);
                         if (legacyList != null)
                         {
-                            return new SceneData
+                            data = new SceneData
                             {
                                 Instances = legacyList
                             };
                         }
+                    }
+
+                    if (data != null && data.Instances != null)
+                    {
+                        foreach (var inst in data.Instances)
+                        {
+                            if (string.IsNullOrEmpty(inst.prefabName))
+                            {
+                                if (!string.IsNullOrEmpty(inst.assetId)) inst.prefabName = inst.assetId;
+                                else if (!string.IsNullOrEmpty(inst.spriteName)) inst.prefabName = inst.spriteName;
+                            }
+                        }
+                        return data;
                     }
                 }
             }

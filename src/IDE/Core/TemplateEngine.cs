@@ -83,22 +83,23 @@ namespace MonoGameMaker.IDE.Core
 
                 // 3. Edit csproj:
                 // - Change TargetFramework to net8.0
-                // - Add None Update for Content/Scenes to copy to output directory
-                logCallback("Updating csproj configuration for target framework and scenes...");
+                // - Add CopyToOutputDirectory directives for Scenes and Prefabs
+                logCallback("Updating csproj configuration for target framework, scenes, and prefabs...");
                 string csprojContent = File.ReadAllText(csprojPath);
                 
-                // Replace target framework
                 csprojContent = Regex.Replace(csprojContent, @"<TargetFramework>.*?</TargetFramework>", "<TargetFramework>net8.0</TargetFramework>");
 
-                // Inject CopyToOutputDirectory directive for Scenes JSON files
-                string scenesInclude = @"
+                string copyDirectives = @"
   <ItemGroup>
     <None Update=""Content\Scenes\**\*.*"">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update=""Prefabs\**\*.*"">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>";
-                csprojContent = csprojContent.Replace("</Project>", scenesInclude);
+                csprojContent = csprojContent.Replace("</Project>", copyDirectives);
                 File.WriteAllText(csprojPath, csprojContent);
 
                 // 4. Create base directories
@@ -109,24 +110,30 @@ namespace MonoGameMaker.IDE.Core
                 string modelsPath = Path.Combine(contentPath, "Models");
                 string scenesPath = Path.Combine(contentPath, "Scenes");
                 string scriptsPath = Path.Combine(targetDirectory, "Scripts");
+                string prefabsPath = Path.Combine(targetDirectory, "Prefabs");
 
                 Directory.CreateDirectory(texturesPath);
                 Directory.CreateDirectory(audioPath);
                 Directory.CreateDirectory(modelsPath);
                 Directory.CreateDirectory(scenesPath);
                 Directory.CreateDirectory(scriptsPath);
+                Directory.CreateDirectory(prefabsPath);
 
                 // 5. Create default scene_init.json
                 string sceneInitPath = Path.Combine(scenesPath, "scene_init.json");
                 if (!File.Exists(sceneInitPath))
                 {
-                    File.WriteAllText(sceneInitPath, "[]");
+                    File.WriteAllText(sceneInitPath, "{\n  \"Width\": 1280,\n  \"Height\": 720,\n  \"BackgroundColor\": {\n    \"X\": 0.1,\n    \"Y\": 0.1,\n    \"Z\": 0.2\n  },\n  \"BackgroundImage\": \"\",\n  \"Instances\": []\n}");
                 }
 
-                // 6. Inject Runtime/SceneLoader.cs
-                logCallback("Injecting SceneLoader runtime script...");
+                // 6. Inject Runtime folders and files
+                logCallback("Injecting SceneLoader and IEntityScript runtime scripts...");
                 string runtimeDir = Path.Combine(targetDirectory, "Runtime");
                 Directory.CreateDirectory(runtimeDir);
+                
+                string iEntityScriptPath = Path.Combine(runtimeDir, "IEntityScript.cs");
+                File.WriteAllText(iEntityScriptPath, GetIEntityScriptCode());
+
                 string sceneLoaderPath = Path.Combine(runtimeDir, "SceneLoader.cs");
                 File.WriteAllText(sceneLoaderPath, GetSceneLoaderCode());
 
@@ -171,6 +178,22 @@ namespace MonoGameMaker.IDE.Core
             }
         }
 
+        private static string GetIEntityScriptCode()
+        {
+            return @"using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+
+namespace MonoGameMaker.Runtime
+{
+    public interface IEntityScript
+    {
+        void Update(GameTime gameTime);
+        void Draw(SpriteBatch spriteBatch);
+    }
+}
+";
+        }
+
         private static string GetSceneLoaderCode()
         {
             return @"using System;
@@ -211,31 +234,101 @@ namespace MonoGameMaker.Runtime
                 if (File.Exists(jsonPath))
                 {
                     string jsonContent = File.ReadAllText(jsonPath);
-                    var instances = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent);
-                    if (instances != null)
+                    var options = new JsonSerializerOptions { IncludeFields = true };
+                    var sceneData = JsonSerializer.Deserialize<SceneData>(jsonContent, options);
+                    
+                    if (sceneData != null && sceneData.Instances != null)
                     {
-                        foreach (var inst in instances)
+                        foreach (var inst in sceneData.Instances)
                         {
-                            Texture2D texture = null;
-                            try
+                            // Load Prefab metadata
+                            string prefabPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ""Prefabs"", $""{inst.prefabName}.prefab"");
+                            if (!File.Exists(prefabPath))
                             {
-                                string assetPath = ""Textures/"" + inst.assetId;
-                                if (assetPath.EndsWith("".png"") || assetPath.EndsWith("".jpg"") || assetPath.EndsWith("".jpeg""))
-                                {
-                                    assetPath = assetPath.Substring(0, assetPath.LastIndexOf('.'));
-                                }
-                                texture = content.Load<Texture2D>(assetPath);
+                                prefabPath = Path.Combine(Directory.GetCurrentDirectory(), ""Prefabs"", $""{inst.prefabName}.prefab"");
                             }
-                            catch (Exception ex)
+
+                            string textureName = """";
+                            string scriptName = """";
+
+                            if (File.Exists(prefabPath))
                             {
-                                Console.WriteLine($""Error loading texture {inst.assetId}: {ex.Message}"");
+                                try
+                                {
+                                    string prefabJson = File.ReadAllText(prefabPath);
+                                    var prefabData = JsonSerializer.Deserialize<PrefabData>(prefabJson);
+                                    if (prefabData != null)
+                                    {
+                                        textureName = prefabData.TextureName;
+                                        scriptName = prefabData.ScriptName;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($""Error loading prefab data: {ex.Message}"");
+                                }
+                            }
+
+                            Texture2D texture = null;
+                            if (!string.IsNullOrEmpty(textureName))
+                            {
+                                try
+                                {
+                                    string assetPath = ""Textures/"" + textureName;
+                                    if (assetPath.EndsWith("".png"") || assetPath.EndsWith("".jpg"") || assetPath.EndsWith("".jpeg""))
+                                    {
+                                        assetPath = assetPath.Substring(0, assetPath.LastIndexOf('.'));
+                                    }
+                                    texture = content.Load<Texture2D>(assetPath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($""Error loading texture {textureName}: {ex.Message}"");
+                                }
+                            }
+
+                            // Reflection script loading
+                            IEntityScript scriptInstance = null;
+                            if (!string.IsNullOrEmpty(scriptName))
+                            {
+                                try
+                                {
+                                    Type scriptType = null;
+                                    foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                                    {
+                                        var t = assembly.GetType(scriptName);
+                                        if (t == null)
+                                        {
+                                            t = assembly.GetType(assembly.GetName().Name + ""."" + scriptName);
+                                        }
+                                        if (t == null)
+                                        {
+                                            t = assembly.GetType(assembly.GetName().Name + "".Scripts."" + scriptName);
+                                        }
+                                        if (t != null)
+                                        {
+                                            scriptType = t;
+                                            break;
+                                        }
+                                    }
+
+                                    if (scriptType != null && typeof(IEntityScript).IsAssignableFrom(scriptType))
+                                    {
+                                        scriptInstance = (IEntityScript)Activator.CreateInstance(scriptType);
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($""Error resolving script {scriptName}: {ex.Message}"");
+                                }
                             }
 
                             entities.Add(new GameEntity
                             {
-                                AssetId = inst.assetId,
+                                PrefabName = inst.prefabName,
                                 Texture = texture,
-                                Position = new Vector2(inst.x, inst.y)
+                                Position = new Vector2(inst.x, inst.y),
+                                Script = scriptInstance
                             });
                         }
                     }
@@ -253,18 +346,35 @@ namespace MonoGameMaker.Runtime
         }
     }
 
+    public class SceneData
+    {
+        public int Width { get; set; } = 1280;
+        public int Height { get; set; } = 720;
+        public System.Numerics.Vector3 BackgroundColor { get; set; }
+        public string BackgroundImage { get; set; } = string.Empty;
+        public List<EntityInstance> Instances { get; set; } = new List<EntityInstance>();
+    }
+
     public class EntityInstance
     {
-        public string assetId { get; set; } = string.Empty;
+        public string prefabName { get; set; } = string.Empty;
         public float x { get; set; }
         public float y { get; set; }
     }
 
+    public class PrefabData
+    {
+        public string TextureName { get; set; } = string.Empty;
+        public string ScriptName { get; set; } = string.Empty;
+        public string Tag { get; set; } = ""Default"";
+    }
+
     public class GameEntity
     {
-        public string AssetId { get; set; } = string.Empty;
+        public string PrefabName { get; set; } = string.Empty;
         public Texture2D Texture { get; set; }
         public Vector2 Position { get; set; }
+        public IEntityScript Script { get; set; }
     }
 }
 ";
@@ -294,8 +404,8 @@ namespace {projectName}
             Content.RootDirectory = ""Content"";
             IsMouseVisible = true;
             
-            _graphics.PreferredBackBufferWidth = 800;
-            _graphics.PreferredBackBufferHeight = 600;
+            _graphics.PreferredBackBufferWidth = 1280;
+            _graphics.PreferredBackBufferHeight = 720;
         }}
 
         protected override void Initialize()
@@ -319,6 +429,11 @@ namespace {projectName}
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
+            foreach (var entity in _entities)
+            {{
+                entity.Script?.Update(gameTime);
+            }}
+
             base.Update(gameTime);
         }}
 
@@ -330,7 +445,11 @@ namespace {projectName}
 
             foreach (var entity in _entities)
             {{
-                if (entity.Texture != null)
+                if (entity.Script != null)
+                {{
+                    entity.Script.Draw(_spriteBatch);
+                }}
+                else if (entity.Texture != null)
                 {{
                     _spriteBatch.Draw(entity.Texture, entity.Position, Color.White);
                 }}

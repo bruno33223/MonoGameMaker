@@ -101,6 +101,21 @@ namespace MonoGameMaker.IDE.Windows
                 }
 
                 bool opened = ImGui.TreeNodeEx(node.Name, flags);
+
+                if (ImGui.BeginPopupContextItem($"FolderContext##{relativePath}"))
+                {
+                    string folderName = Path.GetFileName(relativePath);
+                    if (folderName == "Prefabs")
+                    {
+                        if (ImGui.MenuItem("Create New Prefab"))
+                        {
+                            GlobalState.SelectedResourcePath = relativePath;
+                            CreateNewPrefab(node.FullPath);
+                        }
+                    }
+                    ImGui.EndPopup();
+                }
+                
                 if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 {
                     GlobalState.SelectedResourcePath = relativePath;
@@ -114,6 +129,30 @@ namespace MonoGameMaker.IDE.Windows
                     }
                     ImGui.TreePop();
                 }
+            }
+        }
+
+        private static void CreateNewPrefab(string fullPath)
+        {
+            try
+            {
+                int index = 1;
+                string newName = $"NewObject_{index}.prefab";
+                string dest = Path.Combine(fullPath, newName);
+                while (File.Exists(dest))
+                {
+                    index++;
+                    newName = $"NewObject_{index}.prefab";
+                    dest = Path.Combine(fullPath, newName);
+                }
+
+                var defaultPrefab = new PrefabData();
+                PrefabSerializer.SavePrefab(dest, defaultPrefab, GlobalState.Log);
+                GlobalState.Log($"Created new prefab file: {newName}");
+            }
+            catch (Exception ex)
+            {
+                GlobalState.Log($"Error creating prefab: {ex.Message}");
             }
         }
     }

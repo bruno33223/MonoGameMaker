@@ -105,8 +105,26 @@ namespace TestConsole
             }
             Console.WriteLine("TEST PASSED: Sprite registered and synchronized successfully.");
 
-            // 3. Serialize Scene Configuration
-            Console.WriteLine("\n[TEST 3] Generating scene_init.json...");
+            // 3. Serialize Scene Configuration with Prefabs
+            Console.WriteLine("\n[TEST 3] Generating mock prefab and scene_init.json...");
+            string prefabsDir = Path.Combine(projectDir, "Prefabs");
+            Directory.CreateDirectory(prefabsDir);
+
+            string mockPrefabPath = Path.Combine(prefabsDir, "mock_prefab.prefab");
+            var prefabData = new PrefabData
+            {
+                TextureName = "mock_sprite",
+                ScriptName = "MockScript",
+                Tag = "Player"
+            };
+
+            bool savePrefabSuccess = PrefabSerializer.SavePrefab(mockPrefabPath, prefabData, Console.WriteLine);
+            if (!savePrefabSuccess)
+            {
+                Console.WriteLine("TEST FAILED: Prefab serialization failed.");
+                Environment.Exit(1);
+            }
+
             var sceneData = new SceneSerializer.SceneData
             {
                 Width = 1280,
@@ -114,8 +132,8 @@ namespace TestConsole
                 BackgroundColor = new System.Numerics.Vector3(0.1f, 0.1f, 0.2f),
                 Instances = new List<SceneSerializer.EntityInstance>
                 {
-                    new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 150, y = 200 },
-                    new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 400, y = 350 }
+                    new SceneSerializer.EntityInstance { prefabName = "mock_prefab", x = 150, y = 200 },
+                    new SceneSerializer.EntityInstance { prefabName = "mock_prefab", x = 400, y = 350 }
                 }
             };
 

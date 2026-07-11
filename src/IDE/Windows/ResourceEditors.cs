@@ -20,7 +20,7 @@ namespace MonoGameMaker.IDE.Windows
         {
             public SceneSerializer.SceneData Scene = new SceneSerializer.SceneData();
             public int SelectedIndex = -1;
-            public string InstTextureName = "";
+            public string InstPrefabName = "";
             public int InstX = 100;
             public int InstY = 100;
 
@@ -33,6 +33,7 @@ namespace MonoGameMaker.IDE.Windows
         private static readonly Dictionary<string, SceneEditorState> _sceneStates = new();
         
         private static string _newScriptName = "Script1";
+        private static string _newPrefabName = "NewObject1";
 
         public static void DrawPropertiesWindow()
         {
@@ -70,7 +71,14 @@ namespace MonoGameMaker.IDE.Windows
             }
             else
             {
-                DrawFileProperties(res, absolutePath);
+                if (res.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+                {
+                    DrawPrefabProperties(res, absolutePath);
+                }
+                else
+                {
+                    DrawFileProperties(res, absolutePath);
+                }
             }
 
             ImGui.End();
@@ -202,14 +210,22 @@ namespace MonoGameMaker.IDE.Windows
                         {
                             string cleanName = Path.GetFileNameWithoutExtension(scriptName);
                             string template = $@"using System;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
+using MonoGameMaker.Runtime;
 
 namespace {GlobalState.CurrentProjectName}.Scripts
 {{
-    public static class {cleanName}
+    public class {cleanName} : IEntityScript
     {{
-        public static void Execute()
+        public void Update(GameTime gameTime)
         {{
-            // Custom game/behavior logic
+            // Custom update behavior logic
+        }}
+
+        public void Draw(SpriteBatch spriteBatch)
+        {{
+            // Custom draw behavior logic (if needed, otherwise default texture draws)
         }}
     }}
 }}
@@ -240,6 +256,150 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                             GlobalState.Log("Created scene_init.json.");
                         }
                     }
+                }
+            }
+            else if (folderName == "Prefabs")
+            {
+                ImGui.Text("Create New Prefab Object");
+                ImGui.SetNextItemWidth(-1);
+                ImGui.InputText("##NewPrefabName", ref _newPrefabName, 64);
+
+                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
+                if (ImGui.Button("Create Prefab File", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                {
+                    string prefabName = _newPrefabName.Trim();
+                    if (string.IsNullOrEmpty(prefabName))
+                    {
+                        GlobalState.Log("Error: Prefab name cannot be empty.");
+                    }
+                    else
+                    {
+                        if (!prefabName.EndsWith(".prefab")) prefabName += ".prefab";
+                        string destPath = Path.Combine(absolutePath, prefabName);
+                        if (File.Exists(destPath))
+                        {
+                            GlobalState.Log($"Error: Prefab {prefabName} already exists.");
+                        }
+                        else
+                        {
+                            var defaultPrefab = new PrefabData();
+                            PrefabSerializer.SavePrefab(destPath, defaultPrefab, GlobalState.Log);
+                            GlobalState.Log($"Created new prefab: {prefabName}");
+                            _newPrefabName = "NewObject_" + (Directory.GetFiles(absolutePath, "*.prefab").Length + 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        private static void DrawPrefabProperties(string relativePath, string absolutePath)
+        {
+            string fileName = Path.GetFileName(relativePath);
+            ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0.8f, 1f), $"Prefab: {fileName}");
+            ImGui.Text($"Relative Path: {relativePath}");
+            ImGui.Separator();
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
+            var prefab = PrefabCache.GetPrefab(absolutePath);
+
+            // Fetch available textures in project
+            string texturesDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures");
+            var availableTextures = new List<string>();
+            if (Directory.Exists(texturesDir))
+            {
+                foreach (var file in Directory.GetFiles(texturesDir))
+                {
+                    availableTextures.Add(Path.GetFileNameWithoutExtension(file));
+                }
+            }
+
+            // Texture Selection Combo
+            string currentTex = prefab.TextureName;
+            ImGui.Text("Texture Asset:");
+            DrawBackgroundImageComboBox(availableTextures, ref currentTex, absolutePath);
+            prefab.TextureName = currentTex;
+
+            // Script Name Input
+            string currentScript = prefab.ScriptName;
+            ImGui.Text("Script Class Name:");
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.InputText("##PrefabScriptName", ref currentScript, 128))
+            {
+                prefab.ScriptName = currentScript;
+            }
+
+            // Tag Input
+            string currentTag = prefab.Tag;
+            ImGui.Text("Tag:");
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.InputText("##PrefabTag", ref currentTag, 64))
+            {
+                prefab.Tag = currentTag;
+            }
+
+            ImGui.Dummy(new System.Numerics.Vector2(0, 10));
+
+            // Texture Preview
+            if (!string.IsNullOrEmpty(prefab.TextureName))
+            {
+                string texFilePath = Path.Combine(texturesDir, prefab.TextureName + ".png");
+                if (!File.Exists(texFilePath)) texFilePath = Path.Combine(texturesDir, prefab.TextureName + ".jpg");
+                if (!File.Exists(texFilePath)) texFilePath = Path.Combine(texturesDir, prefab.TextureName + ".jpeg");
+
+                if (File.Exists(texFilePath))
+                {
+                    int imgW, imgH;
+                    IntPtr imguiId = TextureCache.GetPreview(texFilePath, out imgW, out imgH);
+                    if (imguiId != IntPtr.Zero)
+                    {
+                        float w = imgW;
+                        float h = imgH;
+                        float maxWidth = ImGui.GetContentRegionAvail().X;
+                        if (maxWidth > 200) maxWidth = 200;
+                        if (w > maxWidth)
+                        {
+                            float ratio = maxWidth / w;
+                            w = maxWidth;
+                            h = h * ratio;
+                        }
+                        ImGui.Text("Texture Preview:");
+                        ImGui.Image(imguiId, new System.Numerics.Vector2(w, h));
+                        ImGui.Dummy(new System.Numerics.Vector2(0, 10));
+                    }
+                }
+                else
+                {
+                    ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.5f, 0f, 1f), "(Texture file not found in Content/Textures)");
+                }
+            }
+
+            float spacing = ImGui.GetStyle().ItemSpacing.X;
+            float halfWidth = (ImGui.GetContentRegionAvail().X - spacing) / 2;
+
+            if (ImGui.Button("Save Prefab", new System.Numerics.Vector2(halfWidth, 30)))
+            {
+                bool success = PrefabSerializer.SavePrefab(absolutePath, prefab, GlobalState.Log);
+                if (success)
+                {
+                    PrefabCache.Invalidate(absolutePath);
+                    GlobalState.Log($"Saved changes to prefab {fileName}");
+                }
+            }
+
+            ImGui.SameLine();
+            if (ImGui.Button("Delete Prefab", new System.Numerics.Vector2(halfWidth, 30)))
+            {
+                try
+                {
+                    PrefabCache.Invalidate(absolutePath);
+                    File.Delete(absolutePath);
+                    GlobalState.SelectedResourcePath = null;
+                    GlobalState.Log($"Deleted prefab file {fileName}.");
+                }
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Error deleting prefab: {ex.Message}");
                 }
             }
         }
@@ -448,6 +608,17 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 }
             }
 
+            // Find available prefabs
+            string prefabsDir = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs");
+            var availablePrefabs = new List<string>();
+            if (Directory.Exists(prefabsDir))
+            {
+                foreach (var file in Directory.GetFiles(prefabsDir, "*.prefab"))
+                {
+                    availablePrefabs.Add(Path.GetFileNameWithoutExtension(file));
+                }
+            }
+
             // Set up 2-column Resizable ImGui Table
             if (ImGui.BeginTable($"SceneEditorTable##{absolutePath}", 2, ImGuiTableFlags.Resizable))
             {
@@ -522,11 +693,11 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         for (int i = 0; i < state.Scene.Instances.Count; i++)
                         {
                             var inst = state.Scene.Instances[i];
-                            string label = $"{i}: '{inst.assetId}' at ({inst.x:F0}, {inst.y:F0})";
+                            string label = $"{i}: '{inst.prefabName}' at ({inst.x:F0}, {inst.y:F0})";
                             if (ImGui.Selectable(label, state.SelectedIndex == i))
                             {
                                 state.SelectedIndex = i;
-                                state.InstTextureName = inst.assetId;
+                                state.InstPrefabName = inst.prefabName;
                                 state.InstX = (int)inst.x;
                                 state.InstY = (int)inst.y;
                             }
@@ -540,7 +711,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         {
                             ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0.8f, 1f), "Edit Selected Entity");
 
-                            DrawTextureComboBox(availableTextures, ref state.InstTextureName, absolutePath);
+                            DrawPrefabComboBox(availablePrefabs, ref state.InstPrefabName, absolutePath);
 
                             ImGui.SetNextItemWidth(-1);
                             ImGui.InputInt("Position X", ref state.InstX);
@@ -553,7 +724,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                             if (ImGui.Button("Update Pos", new System.Numerics.Vector2(halfWidth, 30)))
                             {
                                 var inst = state.Scene.Instances[state.SelectedIndex];
-                                inst.assetId = state.InstTextureName;
+                                inst.prefabName = state.InstPrefabName;
                                 inst.x = state.InstX;
                                 inst.y = state.InstY;
                                 GlobalState.Log($"Updated entity {state.SelectedIndex} properties.");
@@ -571,12 +742,12 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         {
                             ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0f, 1f), "Add New Entity");
 
-                            if (string.IsNullOrEmpty(state.InstTextureName) && availableTextures.Count > 0)
+                            if (string.IsNullOrEmpty(state.InstPrefabName) && availablePrefabs.Count > 0)
                             {
-                                state.InstTextureName = availableTextures[0];
+                                state.InstPrefabName = availablePrefabs[0];
                             }
 
-                            DrawTextureComboBox(availableTextures, ref state.InstTextureName, absolutePath);
+                            DrawPrefabComboBox(availablePrefabs, ref state.InstPrefabName, absolutePath);
 
                             ImGui.SetNextItemWidth(-1);
                             ImGui.InputInt("Position X", ref state.InstX);
@@ -585,19 +756,19 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 
                             if (ImGui.Button("Add Entity", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                             {
-                                if (string.IsNullOrEmpty(state.InstTextureName))
+                                if (string.IsNullOrEmpty(state.InstPrefabName))
                                 {
-                                    GlobalState.Log("Error: Add a texture to the project first.");
+                                    GlobalState.Log("Error: Create a prefab in the project first.");
                                 }
                                 else
                                 {
                                     state.Scene.Instances.Add(new SceneSerializer.EntityInstance
                                     {
-                                        assetId = state.InstTextureName,
+                                        prefabName = state.InstPrefabName,
                                         x = state.InstX,
                                         y = state.InstY
                                     });
-                                    GlobalState.Log($"Added entity '{state.InstTextureName}' at ({state.InstX}, {state.InstY}).");
+                                    GlobalState.Log($"Added entity '{state.InstPrefabName}' at ({state.InstX}, {state.InstY}).");
                                 }
                             }
                         }
@@ -682,9 +853,14 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 for (int i = 0; i < state.Scene.Instances.Count; i++)
                 {
                     var inst = state.Scene.Instances[i];
-                    string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".png");
-                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpg");
-                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpeg");
+                    
+                    // Look up prefab properties
+                    string pPath = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs", inst.prefabName + ".prefab");
+                    PrefabData pData = PrefabCache.GetPrefab(pPath);
+
+                    string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".png");
+                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpg");
+                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpeg");
 
                     Texture2D? texture = TextureCache.GetTexture(texPath);
                     
@@ -741,9 +917,12 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         float w = 64f;
                         float h = 64f;
 
-                        string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".png");
-                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpg");
-                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", inst.assetId + ".jpeg");
+                        string pPath = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs", inst.prefabName + ".prefab");
+                        PrefabData pData = PrefabCache.GetPrefab(pPath);
+
+                        string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".png");
+                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpg");
+                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpeg");
 
                         Texture2D? texture = TextureCache.GetTexture(texPath);
                         if (texture != null)
@@ -764,7 +943,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     if (clickedIndex >= 0)
                     {
                         var inst = state.Scene.Instances[clickedIndex];
-                        state.InstTextureName = inst.assetId;
+                        state.InstPrefabName = inst.prefabName;
                         state.InstX = (int)inst.x;
                         state.InstY = (int)inst.y;
                     }
@@ -785,7 +964,7 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                 }
 
-                // Drag & Drop zones (1:1 drop coordinates)
+                // Drag & Drop zones (1:1 drop coordinates, accepting ONLY .prefab files)
                 if (ImGui.BeginDragDropTarget())
                 {
                     var payload = ImGui.AcceptDragDropPayload("EXPLORER_ASSET");
@@ -797,20 +976,24 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                             System.Runtime.InteropServices.Marshal.Copy((IntPtr)payload.Data, data, 0, payload.DataSize);
                             string draggedPath = System.Text.Encoding.UTF8.GetString(data);
 
-                            if (draggedPath.StartsWith("Content/Textures/"))
+                            if (draggedPath.StartsWith("Prefabs/") && draggedPath.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                             {
-                                string assetId = Path.GetFileNameWithoutExtension(draggedPath);
+                                string prefabName = Path.GetFileNameWithoutExtension(draggedPath);
                                 
                                 float dropScaledX = mousePos.X - canvasPos.X;
                                 float dropScaledY = mousePos.Y - canvasPos.Y;
 
                                 state.Scene.Instances.Add(new SceneSerializer.EntityInstance
                                 {
-                                    assetId = assetId,
+                                    prefabName = prefabName,
                                     x = dropScaledX,
                                     y = dropScaledY
                                 });
-                                GlobalState.Log($"Dropped '{assetId}' onto scene at ({dropScaledX:F0}, {dropScaledY:F0})");
+                                GlobalState.Log($"Dropped prefab '{prefabName}' onto scene at ({dropScaledX:F0}, {dropScaledY:F0})");
+                            }
+                            else
+                            {
+                                GlobalState.Log("Rejected drop: Only .prefab files from the Prefabs folder can be dropped onto the scene.");
                             }
                         }
                     }
@@ -845,6 +1028,38 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     if (ImGui.Selectable(tex, isSelected))
                     {
                         selectedTextureName = tex;
+                    }
+                    if (isSelected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+                ImGui.EndCombo();
+            }
+        }
+
+        private static void DrawPrefabComboBox(List<string> availablePrefabs, ref string selectedPrefabName, string absolutePath)
+        {
+            if (availablePrefabs.Count == 0)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.3f, 0.3f, 1f), "No prefabs available in project!");
+                return;
+            }
+
+            if (!availablePrefabs.Contains(selectedPrefabName))
+            {
+                selectedPrefabName = availablePrefabs[0];
+            }
+
+            ImGui.SetNextItemWidth(-1);
+            if (ImGui.BeginCombo($"##PrefabCombo_{absolutePath}", selectedPrefabName))
+            {
+                foreach (var prefab in availablePrefabs)
+                {
+                    bool isSelected = (selectedPrefabName == prefab);
+                    if (ImGui.Selectable(prefab, isSelected))
+                    {
+                        selectedPrefabName = prefab;
                     }
                     if (isSelected)
                     {
