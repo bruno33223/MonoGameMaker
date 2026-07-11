@@ -161,7 +161,7 @@ namespace MonoGameMaker.IDE
                                     }
 
                                     // Resolve script type using Reflection over AssemblyReloader.LoadedAssembly
-                                    IEntityScript? scriptInstance = null;
+                                    object? scriptInstance = null;
                                     if (!string.IsNullOrEmpty(prefabData.ScriptName))
                                     {
                                         try
@@ -176,13 +176,32 @@ namespace MonoGameMaker.IDE
                                                 scriptType = AssemblyReloader.LoadedAssembly.GetType(AssemblyReloader.LoadedAssembly.GetName().Name + ".Scripts." + prefabData.ScriptName);
                                             }
 
-                                            if (scriptType != null && typeof(IEntityScript).IsAssignableFrom(scriptType))
+                                            if (scriptType != null)
                                             {
-                                                scriptInstance = (IEntityScript)Activator.CreateInstance(scriptType);
+                                                Type? baseType = scriptType.BaseType;
+                                                bool isBehavior = false;
+                                                while (baseType != null)
+                                                {
+                                                    if (baseType.FullName == "MonoGameMaker.Runtime.EntityBehavior")
+                                                    {
+                                                        isBehavior = true;
+                                                        break;
+                                                    }
+                                                    baseType = baseType.BaseType;
+                                                }
+
+                                                if (isBehavior)
+                                                {
+                                                    scriptInstance = Activator.CreateInstance(scriptType);
+                                                }
+                                                else
+                                                {
+                                                    GlobalState.Log($"Warning: Script type '{prefabData.ScriptName}' does not inherit from EntityBehavior.");
+                                                }
                                             }
                                             else
                                             {
-                                                GlobalState.Log($"Warning: Script type '{prefabData.ScriptName}' not found in assembly or does not implement IEntityScript.");
+                                                GlobalState.Log($"Warning: Script type '{prefabData.ScriptName}' not found in assembly.");
                                             }
                                         }
                                         catch (Exception ex)
@@ -202,26 +221,31 @@ namespace MonoGameMaker.IDE
                                         foreach (var kv in inst.CustomProperties) mergedProps[kv.Key] = kv.Value;
                                     }
 
-                                    // Create GameEntity
-                                    var gameEntity = new GameEntity
+                                    // Create GameEntity via reflection
+                                    object? gameEntity = null;
+                                    Type? gameEntityType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.GameEntity");
+                                    if (gameEntityType != null)
                                     {
-                                        PrefabName = inst.prefabName,
-                                        Texture = texture,
-                                        Position = new Vector2(inst.x, inst.y),
-                                        Script = scriptInstance,
-                                        Tag = prefabData.Tag ?? "Default"
-                                    };
+                                        gameEntity = Activator.CreateInstance(gameEntityType);
+                                        gameEntityType.GetProperty("PrefabName")?.SetValue(gameEntity, inst.prefabName);
+                                        gameEntityType.GetProperty("Texture")?.SetValue(gameEntity, texture);
+                                        gameEntityType.GetProperty("Position")?.SetValue(gameEntity, new Vector2(inst.x, inst.y));
+                                        gameEntityType.GetProperty("Script")?.SetValue(gameEntity, scriptInstance);
+                                        gameEntityType.GetProperty("Tag")?.SetValue(gameEntity, prefabData.Tag ?? "Default");
+                                    }
 
                                     // Initialize script
-                                    if (scriptInstance != null)
+                                    if (scriptInstance != null && gameEntity != null)
                                     {
                                         try
                                         {
-                                            scriptInstance.Initialize(gameEntity, mergedProps);
+                                            scriptInstance.GetType().GetProperty("Entity")?.SetValue(scriptInstance, gameEntity);
+                                            scriptInstance.GetType().GetProperty("Properties")?.SetValue(scriptInstance, mergedProps);
+                                            scriptInstance.GetType().GetMethod("Awake")?.Invoke(scriptInstance, null);
                                         }
                                         catch (Exception ex)
                                         {
-                                            GlobalState.Log($"Error calling script Initialize on {inst.prefabName}: {ex.Message}");
+                                            GlobalState.Log($"Error calling script Awake on {inst.prefabName}: {ex.Message}");
                                         }
                                     }
 

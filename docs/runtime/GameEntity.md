@@ -1,6 +1,6 @@
 # `GameEntity` (Class)
 
-The `GameEntity` class is the base runtime representation of an entity instance. It coordinates coordinate transforms, collision boundaries, rendering assets, tags, and behavior attachments.
+The `GameEntity` class represents a physical entity instance present in the active scene. It coordinates coordinate transforms, collision boundaries, rendering assets, tags, behavior attachments, and sprite sheet animation states.
 
 ---
 
@@ -14,11 +14,15 @@ namespace MonoGameMaker.Runtime
         public string PrefabName { get; set; }
         public Texture2D? Texture { get; set; }
         public Vector2 Position { get; set; }
-        public IEntityScript? Script { get; set; }
+        public EntityBehavior? Script { get; set; }
         public string Tag { get; set; }
         public bool IsDestroyed { get; set; }
+        public Rectangle? SourceRect { get; set; }
         
         public Rectangle Bounds { get; }
+
+        public void PlayAnimation(int frameWidth, int frameHeight, int startFrame, int endFrame, float fps);
+        public void UpdateAnimation(GameTime gameTime);
     }
 }
 ```
@@ -28,13 +32,31 @@ namespace MonoGameMaker.Runtime
 *   **`PrefabName`** (string): The identifier name matching the `.prefab` file layout definition this entity was cloned from.
 *   **`Texture`** (Texture2D): The texture asset drawn in world space.
 *   **`Position`** (Vector2): The world space coordinates of the entity. Modifying this changes its position in the game world.
-*   **`Script`** (IEntityScript): The execution controller handling update/draw logic triggers.
+*   **`Script`** (EntityBehavior): The execution behavior controller handling logical events.
 *   **`Tag`** (string): Categorization identifier used to filter collision queries.
 *   **`IsDestroyed`** (bool): Flag that cleans up the entity at the end of the physics frame.
+*   **`SourceRect`** (Rectangle?): Bounding viewport rectangle used to clip specific sub-regions of the spritesheet. Automatically updated by `PlayAnimation` or set to null to draw the entire texture.
 *   **`Bounds`** (Rectangle): Bounding box used for AABB collision detection. Returns:
-    `new Rectangle((int)Position.X, (int)Position.Y, Texture.Width, Texture.Height)`
-    If `Texture` is null, returns a default size rectangle:
-    `new Rectangle((int)Position.X, (int)Position.Y, 64, 64)`.
+    - If `SourceRect` is active: `new Rectangle((int)Position.X, (int)Position.Y, SourceRect.Value.Width, SourceRect.Value.Height)`
+    - If `SourceRect` is null and `Texture` is not null: `new Rectangle((int)Position.X, (int)Position.Y, Texture.Width, Texture.Height)`
+    - Fallback: `new Rectangle((int)Position.X, (int)Position.Y, 64, 64)`.
+
+---
+
+## Methods
+
+### `PlayAnimation`
+- **Signature**: `void PlayAnimation(int frameWidth, int frameHeight, int startFrame, int endFrame, float fps)`
+- **Explanation**: Initiates a spritesheet animation sequence. If the specified parameters match the currently playing animation, the request is ignored to avoid resetting the frame index timer.
+- **Example**:
+  ```csharp
+  Entity.PlayAnimation(32, 32, 0, 3, 10f); // Play 4-frame cycle at 10 FPS
+  ```
+
+### `UpdateAnimation`
+- **Signature**: `void UpdateAnimation(GameTime gameTime)`
+- **Explanation**: Automatically called by `EntityManager.Update` every frame to advance the animation timer and update `SourceRect`.
+- **Example**: Automatically handled by the engine.
 
 ---
 
@@ -44,19 +66,7 @@ To move an entity, update its `Position` property:
 `entity.Position = new Vector2(entity.Position.X + delta, entity.Position.Y);`
 Updating `Position` automatically adjusts the calculated `Bounds` coordinate origins for collision queries.
 
-### Overriding Bounding Box
-Because `Bounds` is a read-only calculated property based on the active `Texture` dimension, if a custom collision box size is needed (e.g. smaller box for player hitboxes), you can set a smaller/larger texture asset or implement custom collision offset adjustments directly inside the script collision logic:
-
-```csharp
-// Inside custom script Update:
-// Instead of checking generic caller.Bounds, construct a custom boundary rectangle:
-Rectangle customHitbox = new Rectangle(
-    (int)_entity.Position.X + 8, // X offset
-    (int)_entity.Position.Y + 8, // Y offset
-    _entity.Texture.Width - 16,  // Custom width
-    _entity.Texture.Height - 16  // Custom height
-);
-```
+Because `Bounds` calculations take `SourceRect` dimensions into account, starting a spritesheet animation (e.g. `PlayAnimation(32, 32, 0, 3, 10)`) automatically reduces the entity's collision hitbox to the size of a single frame (32x32) rather than checking the entire sheet size.
 
 ---
 
@@ -64,6 +74,6 @@ Rectangle customHitbox = new Rectangle(
 
 When directing an AI coding assistant to create or modify entity instances:
 
-*   **Prompt Scenario**: *"Write a movement update logic block that adjusts player Position based on axis inputs, clamping coordinates within the boundary limits."*
-*   **Prompt Scenario**: *"Create a script that dynamically updates the entity Tag property to 'Hazardous' when health drops below 50."*
+*   **Prompt Scenario**: *"Adjust the entity position and query its Bounds width or height to apply boundaries checking inside the script Update method."*
+*   **Prompt Scenario**: *"Invoke PlayAnimation on the entity to trigger an animation sequence when moving left."*
 *   **Key Guardrail**: Avoid changing entity variables outside script tick boundaries. Direct coordinate changes should occur inside the script's `Update` lifecycle method.
