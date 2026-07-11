@@ -823,17 +823,35 @@ namespace MonoGameMaker.IDE
             GlobalState.Log("Build succeeded! Starting game window...");
 
             // Run process start
+            string targetDll = Path.Combine(GlobalState.CurrentProjectPath, "bin", "Debug", "net8.0", $"{GlobalState.CurrentProjectName}.dll");
+            string? workingDir = Path.GetDirectoryName(targetDll);
+
             var runPsi = new ProcessStartInfo
             {
                 FileName = dotnetPath,
-                Arguments = $"run --project \"{csprojPath}\"",
+                Arguments = $"\"{targetDll}\"",
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = GlobalState.CurrentProjectPath
+                WorkingDirectory = workingDir ?? GlobalState.CurrentProjectPath
             };
             TemplateEngine.ConfigureDotnetPath(runPsi);
+
+            // Clean environmental variables starting with DOTNET_ or COREHOST_ to isolate execution context
+            var envsToRemove = new List<string>();
+            foreach (string key in runPsi.EnvironmentVariables.Keys)
+            {
+                if (key.StartsWith("DOTNET_", StringComparison.OrdinalIgnoreCase) || 
+                    key.StartsWith("COREHOST_", StringComparison.OrdinalIgnoreCase))
+                {
+                    envsToRemove.Add(key);
+                }
+            }
+            foreach (var key in envsToRemove)
+            {
+                runPsi.EnvironmentVariables.Remove(key);
+            }
 
             try
             {
