@@ -805,24 +805,27 @@ namespace MonoGameMaker.Runtime
                 _entitiesToAdd.Clear();
             }
 
-            foreach (var entity in Entities)
+            // Create a snapshot to safely allow modifying the list during updates
+            var updateList = new List<GameEntity>(Entities);
+            foreach (var entity in updateList)
             {
-                if (!entity.IsDestroyed)
+                if (!entity.IsDestroyed && Entities.Contains(entity))
                 {
                     entity.Script?.Update(gameTime);
                     entity.UpdateAnimation(gameTime);
                 }
             }
 
-            // O(N^2) pairwise collisions check
-            for (int i = 0; i < Entities.Count; i++)
+            // O(N^2) pairwise collisions check on snapshot
+            var collisionList = new List<GameEntity>(Entities);
+            for (int i = 0; i < collisionList.Count; i++)
             {
-                var entA = Entities[i];
-                if (entA.IsDestroyed) continue;
-                for (int j = i + 1; j < Entities.Count; j++)
+                var entA = collisionList[i];
+                if (entA.IsDestroyed || !Entities.Contains(entA)) continue;
+                for (int j = i + 1; j < collisionList.Count; j++)
                 {
-                    var entB = Entities[j];
-                    if (entB.IsDestroyed) continue;
+                    var entB = collisionList[j];
+                    if (entB.IsDestroyed || !Entities.Contains(entB)) continue;
                     if (entA.Bounds.Intersects(entB.Bounds))
                     {
                         entA.Script?.OnCollision(entB);
