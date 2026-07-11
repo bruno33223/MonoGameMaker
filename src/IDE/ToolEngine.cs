@@ -65,6 +65,9 @@ namespace MonoGameMaker.IDE
 
         protected override void Initialize()
         {
+            IsFixedTimeStep = true;
+            TargetElapsedTime = TimeSpan.FromSeconds(1.0 / 60.0);
+
             _imGuiRenderer = new ImGuiRenderer(this);
             _imGuiRenderer.RebuildFontAtlas();
 
@@ -298,21 +301,83 @@ namespace MonoGameMaker.IDE
                     }
                 }
 
-                // Run target project's EntityManager.Update via reflection
-                Type? entityManagerType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.EntityManager");
-                if (entityManagerType != null)
+                bool shouldUpdateSimulation = false;
+                if (GlobalState.CurrentSimState == GlobalState.SimState.Playing)
                 {
-                    var updateMethod = entityManagerType.GetMethod("Update", BindingFlags.Public | BindingFlags.Static);
-                    if (updateMethod != null)
+                    shouldUpdateSimulation = true;
+                }
+                else if (GlobalState.CurrentSimState == GlobalState.SimState.Paused && GlobalState.TriggerSingleFrame)
+                {
+                    shouldUpdateSimulation = true;
+                }
+
+                if (shouldUpdateSimulation)
+                {
+                    // Inject input states into assembly shadow input classes
+                    if (AssemblyReloader.LoadedAssembly != null)
                     {
                         try
                         {
-                            updateMethod.Invoke(null, new object[] { gameTime });
+                            Type? kbType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.Keyboard");
+                            Type? mType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.Mouse");
+
+                            if (kbType != null && mType != null)
+                            {
+                                Microsoft.Xna.Framework.Input.KeyboardState kbState;
+                                Microsoft.Xna.Framework.Input.MouseState mState;
+
+                                if (GlobalState.IsViewportFocused)
+                                {
+                                    kbState = Microsoft.Xna.Framework.Input.Keyboard.GetState();
+                                    var realMouse = Microsoft.Xna.Framework.Input.Mouse.GetState();
+                                    mState = new Microsoft.Xna.Framework.Input.MouseState(
+                                        (int)GlobalState.ViewportMousePosition.X,
+                                        (int)GlobalState.ViewportMousePosition.Y,
+                                        realMouse.ScrollWheelValue,
+                                        realMouse.LeftButton,
+                                        realMouse.MiddleButton,
+                                        realMouse.RightButton,
+                                        realMouse.XButton1,
+                                        realMouse.XButton2
+                                    );
+                                }
+                                else
+                                {
+                                    kbState = new Microsoft.Xna.Framework.Input.KeyboardState();
+                                    mState = new Microsoft.Xna.Framework.Input.MouseState();
+                                }
+
+                                kbType.GetMethod("SetState", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, new object[] { kbState });
+                                mType.GetMethod("SetState", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, new object[] { mState });
+                            }
                         }
                         catch (Exception ex)
                         {
-                            GlobalState.Log($"Error executing simulation loop: {ex.Message}");
+                            GlobalState.Log($"Error updating simulation input: {ex.Message}");
                         }
+                    }
+
+                    // Run target project's EntityManager.Update via reflection
+                    Type? entityManagerType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.EntityManager");
+                    if (entityManagerType != null)
+                    {
+                        var updateMethod = entityManagerType.GetMethod("Update", BindingFlags.Public | BindingFlags.Static);
+                        if (updateMethod != null)
+                        {
+                            try
+                            {
+                                updateMethod.Invoke(null, new object[] { gameTime });
+                            }
+                            catch (Exception ex)
+                            {
+                                GlobalState.Log($"Error executing simulation loop: {ex.Message}");
+                            }
+                        }
+                    }
+
+                    if (GlobalState.CurrentSimState == GlobalState.SimState.Paused)
+                    {
+                        GlobalState.TriggerSingleFrame = false;
                     }
                 }
             }
@@ -502,9 +567,9 @@ namespace MonoGameMaker.IDE
             {
                 if (!GlobalState.IsGameRunning)
                 {
-                    // Green Play Button
+                    // Green Standalone Run Button
                     ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.18f, 0.64f, 0.31f, 1.0f));
-                    if (ImGui.Button("▶ Play", new System.Numerics.Vector2(100, 0)))
+                    if (ImGui.Button("▶ Run Standalone", new System.Numerics.Vector2(140, 0)))
                     {
                         _ = RunGameAsync();
                     }
@@ -514,7 +579,7 @@ namespace MonoGameMaker.IDE
                 {
                     // Red Stop Button
                     ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.83f, 0.18f, 0.18f, 1.0f));
-                    if (ImGui.Button("■ Stop", new System.Numerics.Vector2(100, 0)))
+                    if (ImGui.Button("■ Stop Standalone", new System.Numerics.Vector2(140, 0)))
                     {
                         StopRunningGame();
                     }
@@ -523,30 +588,69 @@ namespace MonoGameMaker.IDE
 
                 ImGui.SameLine();
 
-                // Simulation mode toggle
-                if (IsPlaying)
+                // Simulation mode controls
+                if (GlobalState.CurrentSimState == GlobalState.SimState.Edit)
                 {
-                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.85f, 0.45f, 0.0f, 1.0f));
-                    if (ImGui.Button("Pause Simulation", new System.Numerics.Vector2(140, 0)))
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.18f, 0.64f, 0.31f, 1.0f));
+                    if (ImGui.Button("▶ Start Simulation", new System.Numerics.Vector2(140, 0)))
                     {
-                        IsPlaying = false;
-                        GlobalState.Log("Simulation paused. Editor updates resumed.");
+                        GlobalState.CurrentSimState = GlobalState.SimState.Playing;
+                        GlobalState.Log("Simulation started. Editor updates suspended.");
                     }
                     ImGui.PopStyleColor();
                 }
-                else
+                else if (GlobalState.CurrentSimState == GlobalState.SimState.Playing)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.85f, 0.45f, 0.0f, 1.0f));
+                    if (ImGui.Button("⏸ Pause Simulation", new System.Numerics.Vector2(140, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Paused;
+                        GlobalState.Log("Simulation paused. Editor updates resumed.");
+                    }
+                    ImGui.PopStyleColor();
+
+                    ImGui.SameLine();
+
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.83f, 0.18f, 0.18f, 1.0f));
+                    if (ImGui.Button("■ Stop Simulation", new System.Numerics.Vector2(140, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Edit;
+                        GlobalState.Log("Simulation stopped.");
+                    }
+                    ImGui.PopStyleColor();
+                }
+                else if (GlobalState.CurrentSimState == GlobalState.SimState.Paused)
                 {
                     ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.18f, 0.45f, 0.85f, 1.0f));
-                    if (ImGui.Button("Start Simulation", new System.Numerics.Vector2(140, 0)))
+                    if (ImGui.Button("▶ Resume Simulation", new System.Numerics.Vector2(140, 0)))
                     {
-                        IsPlaying = true;
-                        GlobalState.Log("Simulation started. Editor updates suspended.");
+                        GlobalState.CurrentSimState = GlobalState.SimState.Playing;
+                        GlobalState.Log("Simulation resumed.");
+                    }
+                    ImGui.PopStyleColor();
+
+                    ImGui.SameLine();
+
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.83f, 0.18f, 0.18f, 1.0f));
+                    if (ImGui.Button("■ Stop Simulation", new System.Numerics.Vector2(140, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Edit;
+                        GlobalState.Log("Simulation stopped.");
+                    }
+                    ImGui.PopStyleColor();
+
+                    ImGui.SameLine();
+
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.5f, 0.2f, 0.8f, 1.0f));
+                    if (ImGui.Button("🔂 Step Frame", new System.Numerics.Vector2(100, 0)))
+                    {
+                        GlobalState.TriggerSingleFrame = true;
                     }
                     ImGui.PopStyleColor();
                 }
 
                 ImGui.SameLine();
-                ImGui.Text($"Active Project: {GlobalState.CurrentProjectName} | Path: {GlobalState.CurrentProjectPath}");
+                ImGui.Text($"Active Project: {GlobalState.CurrentProjectName} | State: {GlobalState.CurrentSimState}");
             }
             else
             {

@@ -382,13 +382,31 @@ namespace MonoGameMaker.Runtime
 
         private static string GetSharedTypesCode()
         {
-            return @"using System;
+            return @"global using Keyboard = MonoGameMaker.Runtime.Keyboard;
+global using Mouse = MonoGameMaker.Runtime.Mouse;
+
+using System;
 using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
+using Microsoft.Xna.Framework.Input;
 
 namespace MonoGameMaker.Runtime
 {
+    public static class Keyboard
+    {
+        private static KeyboardState _state;
+        public static void SetState(KeyboardState state) { _state = state; }
+        public static KeyboardState GetState() { return _state; }
+    }
+
+    public static class Mouse
+    {
+        private static MouseState _state;
+        public static void SetState(MouseState state) { _state = state; }
+        public static MouseState GetState() { return _state; }
+    }
+
     public class RuntimeScene
     {
         public int Width { get; set; } = 1280;
@@ -1079,6 +1097,9 @@ namespace {projectName}
             
             _graphics.PreferredBackBufferWidth = 1280;
             _graphics.PreferredBackBufferHeight = 720;
+
+            IsFixedTimeStep = true;
+            TargetElapsedTime = System.TimeSpan.FromSeconds(1.0 / 60.0);
         }}
 
         protected override void Initialize()
@@ -1104,6 +1125,9 @@ namespace {projectName}
 
         protected override void Update(GameTime gameTime)
         {{
+            MonoGameMaker.Runtime.Keyboard.SetState(Microsoft.Xna.Framework.Input.Keyboard.GetState());
+            MonoGameMaker.Runtime.Mouse.SetState(Microsoft.Xna.Framework.Input.Mouse.GetState());
+
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
@@ -1450,8 +1474,8 @@ namespace MonoGameMaker.Runtime
         {
             if (!_game.IsActive) return;
             var io = ImGui.GetIO();
-            var mouse = Mouse.GetState();
-            var keyboard = Keyboard.GetState();
+            var mouse = Microsoft.Xna.Framework.Input.Mouse.GetState();
+            var keyboard = Microsoft.Xna.Framework.Input.Keyboard.GetState();
 
             io.AddMousePosEvent(mouse.X, mouse.Y);
             io.AddMouseButtonEvent(0, mouse.LeftButton == ButtonState.Pressed);

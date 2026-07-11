@@ -1049,6 +1049,73 @@ namespace MonoGameMaker.IDE.Windows
                 // --- COLUMN 2: Visual Viewport Canvas ---
                 ImGui.TableSetColumnIndex(1);
 
+                // Top viewport controls
+                ImGui.PushStyleVar(ImGuiStyleVar.FramePadding, new System.Numerics.Vector2(6, 6));
+                ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new System.Numerics.Vector2(8, 0));
+
+                if (GlobalState.CurrentSimState == GlobalState.SimState.Edit)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.18f, 0.64f, 0.31f, 1.0f));
+                    if (ImGui.Button("▶ Play", new System.Numerics.Vector2(80, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Playing;
+                        GlobalState.Log("Simulation started. Editor updates suspended.");
+                    }
+                    ImGui.PopStyleColor();
+                }
+                else if (GlobalState.CurrentSimState == GlobalState.SimState.Playing)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.85f, 0.45f, 0.0f, 1.0f));
+                    if (ImGui.Button("⏸ Pause", new System.Numerics.Vector2(80, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Paused;
+                        GlobalState.Log("Simulation paused. Editor updates resumed.");
+                    }
+                    ImGui.PopStyleColor();
+
+                    ImGui.SameLine();
+
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.83f, 0.18f, 0.18f, 1.0f));
+                    if (ImGui.Button("■ Stop", new System.Numerics.Vector2(80, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Edit;
+                        GlobalState.Log("Simulation stopped.");
+                    }
+                    ImGui.PopStyleColor();
+                }
+                else if (GlobalState.CurrentSimState == GlobalState.SimState.Paused)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.18f, 0.45f, 0.85f, 1.0f));
+                    if (ImGui.Button("▶ Resume", new System.Numerics.Vector2(80, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Playing;
+                        GlobalState.Log("Simulation resumed.");
+                    }
+                    ImGui.PopStyleColor();
+
+                    ImGui.SameLine();
+
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.83f, 0.18f, 0.18f, 1.0f));
+                    if (ImGui.Button("■ Stop", new System.Numerics.Vector2(80, 0)))
+                    {
+                        GlobalState.CurrentSimState = GlobalState.SimState.Edit;
+                        GlobalState.Log("Simulation stopped.");
+                    }
+                    ImGui.PopStyleColor();
+
+                    ImGui.SameLine();
+
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.5f, 0.2f, 0.8f, 1.0f));
+                    if (ImGui.Button("🔂 Step Frame", new System.Numerics.Vector2(110, 0)))
+                    {
+                        GlobalState.TriggerSingleFrame = true;
+                    }
+                    ImGui.PopStyleColor();
+                }
+
+                ImGui.PopStyleVar(2);
+                ImGui.Separator();
+
                 ImGui.BeginChild($"SceneEditorViewportChild##{absolutePath}", new System.Numerics.Vector2(-1, -1), ImGuiChildFlags.None, ImGuiWindowFlags.HorizontalScrollbar);
 
                 int desiredW = state.Scene.Width;
@@ -1246,6 +1313,11 @@ namespace MonoGameMaker.IDE.Windows
                 System.Numerics.Vector2 canvasPos = ImGui.GetCursorScreenPos();
                 ImGui.ImageButton($"ViewportCanvas##{absolutePath}", state.RenderTargetId, canvasSize, System.Numerics.Vector2.Zero, System.Numerics.Vector2.One);
                 bool isViewportHovered = ImGui.IsItemHovered();
+
+                // Track viewport focus and local mouse coordinate translations
+                GlobalState.IsViewportFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows);
+                System.Numerics.Vector2 vpMousePos = ImGui.GetMousePos();
+                GlobalState.ViewportMousePosition = new Microsoft.Xna.Framework.Vector2(vpMousePos.X - canvasPos.X, vpMousePos.Y - canvasPos.Y);
 
                 // 5. Draw simulation UI (Screen Space) if playing, wrapped in a child containment window
                 if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)

@@ -15,7 +15,17 @@ namespace MonoGameMaker.IDE.Core
         public static string? SelectedResourcePath { get; set; }
         public static FileSystemCache? CurrentProjectCache { get; set; }
         public static HashSet<string> OpenResources { get; } = new();
-        public static bool IsPlaying { get; set; } = false;
+        public enum SimState { Edit, Playing, Paused }
+        public static SimState CurrentSimState { get; set; } = SimState.Edit;
+        public static bool TriggerSingleFrame { get; set; } = false;
+        public static bool IsViewportFocused { get; set; } = false;
+        public static Microsoft.Xna.Framework.Vector2 ViewportMousePosition { get; set; } = Microsoft.Xna.Framework.Vector2.Zero;
+
+        public static bool IsPlaying
+        {
+            get => CurrentSimState != SimState.Edit;
+            set => CurrentSimState = value ? SimState.Playing : SimState.Edit;
+        }
         public static SceneSerializer.EntityInstance? SelectedNode { get; set; }
         public static List<GameEntity> SimEntities { get; } = new();
         

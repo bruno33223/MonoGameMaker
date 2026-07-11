@@ -97,3 +97,26 @@ To maintain backwards compatibility and simplify development workflows when lega
 3.  **Log Integration**:
     - Build diagnostic logs and migration output are routed directly to the `ConsoleLogsWindow` using `GlobalState.Log(...)`.
 
+---
+
+## 5. Simulation States & Focus-Based Input Isolation
+
+To support proper play/pause simulation and protect user scripts from consuming inputs while the user interacts with the IDE, the framework implements a decoupled simulation lifecycle.
+
+### State Transitions
+
+- **Edit State**: Scripts do not run. Physics/animations are frozen. Camera is static.
+- **Playing State**: Loop executes at a 60Hz fixed time step.
+- **Paused State**: Script execution is halted. If `TriggerSingleFrame` is enabled, a single frame is updated (1/60th second step) and then paused state is restored.
+
+### Focus-Based Interception Data Flow
+
+1. **Focus Assessment**:
+   The IDE determines if the game viewport has focus by querying ImGui:
+   `GlobalState.IsViewportFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows)`
+2. **Translation & Injection**:
+   If focused, the real `KeyboardState` and viewport-translated `MouseState` are passed via reflection to the simulation assembly.
+   If unfocused, empty instances (`new KeyboardState()`, `new MouseState()`) are sent, effectively isolating inputs.
+3. **Global Shadowing**:
+   User scripts use `global using Keyboard` and `global using Mouse` aliases pointing to shadow classes inside `MonoGameMaker.Runtime`. This abstracts the focus-based isolation layer from script code.
+

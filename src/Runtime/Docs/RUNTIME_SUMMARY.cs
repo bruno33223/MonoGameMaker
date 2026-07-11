@@ -263,4 +263,36 @@ namespace MonoGameMaker.Runtime
         /// </summary>
         public static void Draw(string text, Vector2 position, Color color) { }
     }
+
+    /// <summary>
+    /// Shadow Keyboard static class providing focus-isolated keyboard states.
+    /// </summary>
+    public static class Keyboard
+    {
+        /// <summary>
+        /// Retrieves the focus-isolated keyboard state for the current frame.
+        /// </summary>
+        public static KeyboardState GetState() => default;
+
+        /// <summary>
+        /// Sets the active shadow keyboard state.
+        /// </summary>
+        public static void SetState(KeyboardState state) { }
+    }
+
+    /// <summary>
+    /// Shadow Mouse static class providing focus-isolated and translated mouse states.
+    /// </summary>
+    public static class Mouse
+    {
+        /// <summary>
+        /// Retrieves the focus-isolated and translated mouse state for the current frame.
+        /// </summary>
+        public static MouseState GetState() => default;
+
+        /// <summary>
+        /// Sets the active shadow mouse state.
+        /// </summary>
+        public static void SetState(MouseState state) { }
+    }
 }
