@@ -146,6 +146,9 @@ namespace MonoGameMaker.IDE.Core
                 string sceneManagerPath = Path.Combine(runtimeDir, "SceneManager.cs");
                 File.WriteAllText(sceneManagerPath, GetSceneManagerCode());
 
+                string camera2DPath = Path.Combine(runtimeDir, "Camera2D.cs");
+                File.WriteAllText(camera2DPath, GetCamera2DCode());
+
                 // 7. Inject Game1.cs
                 logCallback("Injecting customized Game1 boilerplate...");
                 string game1Path = Path.Combine(targetDirectory, "Game1.cs");
@@ -208,6 +211,7 @@ namespace MonoGameMaker.Runtime
         void Initialize(GameEntity entity, Dictionary<string, string> properties);
         void Update(GameTime gameTime);
         void Draw(SpriteBatch spriteBatch);
+        void DrawUI(SpriteBatch spriteBatch);
     }
 }
 ";
@@ -227,9 +231,14 @@ namespace MonoGameMaker.Runtime
 {
     public static class SceneLoader
     {
-        public static List<GameEntity> LoadScene(string jsonPath, ContentManager content)
+        public static RuntimeScene LoadScene(string jsonPath, ContentManager content)
         {
             var entities = new List<GameEntity>();
+            int sceneWidth = 1280;
+            int sceneHeight = 720;
+            Color bgColor = Color.CornflowerBlue;
+            Texture2D bgTexture = null;
+
             try
             {
                 if (!File.Exists(jsonPath))
@@ -256,133 +265,159 @@ namespace MonoGameMaker.Runtime
                     var options = new JsonSerializerOptions { IncludeFields = true };
                     var sceneData = JsonSerializer.Deserialize<SceneData>(jsonContent, options);
                     
-                    if (sceneData != null && sceneData.Instances != null)
+                    if (sceneData != null)
                     {
-                        foreach (var inst in sceneData.Instances)
+                        sceneWidth = sceneData.Width;
+                        sceneHeight = sceneData.Height;
+                        
+                        var numColor = sceneData.BackgroundColor;
+                        bgColor = new Color(numColor.X, numColor.Y, numColor.Z);
+
+                        if (!string.IsNullOrEmpty(sceneData.BackgroundImage))
                         {
-                            // Load Prefab metadata
-                            string prefabPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ""Prefabs"", $""{inst.prefabName}.prefab"");
-                            if (!File.Exists(prefabPath))
+                            try
                             {
-                                prefabPath = Path.Combine(Directory.GetCurrentDirectory(), ""Prefabs"", $""{inst.prefabName}.prefab"");
+                                string bgAssetPath = ""Textures/"" + sceneData.BackgroundImage;
+                                if (bgAssetPath.EndsWith("".png"") || bgAssetPath.EndsWith("".jpg"") || bgAssetPath.EndsWith("".jpeg""))
+                                {
+                                    bgAssetPath = bgAssetPath.Substring(0, bgAssetPath.LastIndexOf('.'));
+                                }
+                                bgTexture = content.Load<Texture2D>(bgAssetPath);
                             }
-
-                            string textureName = """";
-                            string scriptName = """";
-                            var instPrefab = new PrefabData();
-
-                            if (File.Exists(prefabPath))
+                            catch (Exception ex)
                             {
-                                try
-                                {
-                                    string prefabJson = File.ReadAllText(prefabPath);
-                                    var prefabData = JsonSerializer.Deserialize<PrefabData>(prefabJson);
-                                    if (prefabData != null)
-                                    {
-                                        instPrefab = prefabData;
-                                        textureName = prefabData.TextureName;
-                                        scriptName = prefabData.ScriptName;
-                                    }
-                                }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($""Error loading prefab data: {ex.Message}"");
-                                }
+                                Console.WriteLine($""Error loading background image {sceneData.BackgroundImage}: {ex.Message}"");
                             }
+                        }
 
-                            Texture2D texture = null;
-                            if (!string.IsNullOrEmpty(textureName))
+                        if (sceneData.Instances != null)
+                        {
+                            foreach (var inst in sceneData.Instances)
                             {
-                                try
+                                // Load Prefab metadata
+                                string prefabPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, ""Prefabs"", $""{inst.prefabName}.prefab"");
+                                if (!File.Exists(prefabPath))
                                 {
-                                    string assetPath = ""Textures/"" + textureName;
-                                    if (assetPath.EndsWith("".png"") || assetPath.EndsWith("".jpg"") || assetPath.EndsWith("".jpeg""))
-                                    {
-                                        assetPath = assetPath.Substring(0, assetPath.LastIndexOf('.'));
-                                    }
-                                    texture = content.Load<Texture2D>(assetPath);
+                                    prefabPath = Path.Combine(Directory.GetCurrentDirectory(), ""Prefabs"", $""{inst.prefabName}.prefab"");
                                 }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($""Error loading texture {textureName}: {ex.Message}"");
-                                }
-                            }
 
-                            // Reflection script loading
-                            IEntityScript scriptInstance = null;
-                            if (!string.IsNullOrEmpty(scriptName))
-                            {
-                                try
+                                string textureName = """";
+                                string scriptName = """";
+                                var instPrefab = new PrefabData();
+
+                                if (File.Exists(prefabPath))
                                 {
-                                    Type scriptType = null;
-                                    foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                                    try
                                     {
-                                        var t = assembly.GetType(scriptName);
-                                        if (t == null)
+                                        string prefabJson = File.ReadAllText(prefabPath);
+                                        var prefabData = JsonSerializer.Deserialize<PrefabData>(prefabJson);
+                                        if (prefabData != null)
                                         {
-                                            t = assembly.GetType(assembly.GetName().Name + ""."" + scriptName);
-                                        }
-                                        if (t == null)
-                                        {
-                                            t = assembly.GetType(assembly.GetName().Name + "".Scripts."" + scriptName);
-                                        }
-                                        if (t != null)
-                                        {
-                                            scriptType = t;
-                                            break;
+                                            instPrefab = prefabData;
+                                            textureName = prefabData.TextureName;
+                                            scriptName = prefabData.ScriptName;
                                         }
                                     }
-
-                                    if (scriptType != null && typeof(IEntityScript).IsAssignableFrom(scriptType))
+                                    catch (Exception ex)
                                     {
-                                        scriptInstance = (IEntityScript)Activator.CreateInstance(scriptType);
+                                        Console.WriteLine($""Error loading prefab data: {ex.Message}"");
                                     }
                                 }
-                                catch (Exception ex)
-                                {
-                                    Console.WriteLine($""Error resolving script {scriptName}: {ex.Message}"");
-                                }
-                            }
 
-                            // Merge properties
-                            var mergedProps = new Dictionary<string, string>();
-                            if (instPrefab.CustomProperties != null)
-                            {
-                                foreach (var kv in instPrefab.CustomProperties)
+                                Texture2D texture = null;
+                                if (!string.IsNullOrEmpty(textureName))
                                 {
-                                    mergedProps[kv.Key] = kv.Value;
+                                    try
+                                    {
+                                        string assetPath = ""Textures/"" + textureName;
+                                        if (assetPath.EndsWith("".png"") || assetPath.EndsWith("".jpg"") || assetPath.EndsWith("".jpeg""))
+                                        {
+                                            assetPath = assetPath.Substring(0, assetPath.LastIndexOf('.'));
+                                        }
+                                        texture = content.Load<Texture2D>(assetPath);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($""Error loading texture {textureName}: {ex.Message}"");
+                                    }
                                 }
-                            }
-                            if (inst.CustomProperties != null)
-                            {
-                                foreach (var kv in inst.CustomProperties)
-                                {
-                                    mergedProps[kv.Key] = kv.Value;
-                                }
-                            }
 
-                            var gameEntity = new GameEntity
-                            {
-                                PrefabName = inst.prefabName,
-                                Texture = texture,
-                                Position = new Vector2(inst.x, inst.y),
-                                Script = scriptInstance,
-                                Tag = instPrefab.Tag ?? ""Default""
-                            };
+                                // Reflection script loading
+                                IEntityScript scriptInstance = null;
+                                if (!string.IsNullOrEmpty(scriptName))
+                                {
+                                    try
+                                    {
+                                        Type scriptType = null;
+                                        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+                                        {
+                                            var t = assembly.GetType(scriptName);
+                                            if (t == null)
+                                            {
+                                                t = assembly.GetType(assembly.GetName().Name + ""."" + scriptName);
+                                            }
+                                            if (t == null)
+                                            {
+                                                t = assembly.GetType(assembly.GetName().Name + "".Scripts."" + scriptName);
+                                            }
+                                            if (t != null)
+                                            {
+                                                scriptType = t;
+                                                break;
+                                            }
+                                        }
 
-                            if (scriptInstance != null)
-                            {
-                                try
-                                {
-                                    scriptInstance.Initialize(gameEntity, mergedProps);
+                                        if (scriptType != null && typeof(IEntityScript).IsAssignableFrom(scriptType))
+                                        {
+                                            scriptInstance = (IEntityScript)Activator.CreateInstance(scriptType);
+                                        }
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($""Error resolving script {scriptName}: {ex.Message}"");
+                                    }
                                 }
-                                catch (Exception ex)
+
+                                // Merge properties
+                                var mergedProps = new Dictionary<string, string>();
+                                if (instPrefab.CustomProperties != null)
                                 {
-                                    Console.WriteLine($""Error initializing script: {ex.Message}"");
+                                    foreach (var kv in instPrefab.CustomProperties)
+                                    {
+                                        mergedProps[kv.Key] = kv.Value;
+                                    }
                                 }
+                                if (inst.CustomProperties != null)
+                                {
+                                    foreach (var kv in inst.CustomProperties)
+                                    {
+                                        mergedProps[kv.Key] = kv.Value;
+                                    }
+                                }
+
+                                var gameEntity = new GameEntity
+                                {
+                                    PrefabName = inst.prefabName,
+                                    Texture = texture,
+                                    Position = new Vector2(inst.x, inst.y),
+                                    Script = scriptInstance,
+                                    Tag = instPrefab.Tag ?? ""Default""
+                                };
+
+                                if (scriptInstance != null)
+                                {
+                                    try
+                                    {
+                                        scriptInstance.Initialize(gameEntity, mergedProps);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        Console.WriteLine($""Error initializing script: {ex.Message}"");
+                                    }
+                                }
+
+                                entities.Add(gameEntity);
                             }
-
-                            entities.Add(gameEntity);
                         }
                     }
                 }
@@ -395,8 +430,25 @@ namespace MonoGameMaker.Runtime
             {
                 Console.WriteLine($""Error parsing scene: {ex.Message}"");
             }
-            return entities;
+
+            return new RuntimeScene
+            {
+                Width = sceneWidth,
+                Height = sceneHeight,
+                BackgroundColor = bgColor,
+                BackgroundImage = bgTexture,
+                Entities = entities
+            };
         }
+    }
+
+    public class RuntimeScene
+    {
+        public int Width { get; set; } = 1280;
+        public int Height { get; set; } = 720;
+        public Color BackgroundColor { get; set; } = Color.CornflowerBlue;
+        public Texture2D BackgroundImage { get; set; }
+        public List<GameEntity> Entities { get; set; } = new List<GameEntity>();
     }
 
     public class SceneData
@@ -649,6 +701,15 @@ namespace MonoGameMaker.Runtime
                 }
             }
         }
+
+        public static void DrawUI(SpriteBatch spriteBatch)
+        {
+            foreach (var entity in Entities)
+            {
+                if (entity.IsDestroyed) continue;
+                entity.Script?.DrawUI(spriteBatch);
+            }
+        }
     }
 }
 ";
@@ -704,6 +765,7 @@ namespace MonoGameMaker.Runtime
         {
             return @"using System;
 using System.IO;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework.Content;
 
 namespace MonoGameMaker.Runtime
@@ -712,6 +774,7 @@ namespace MonoGameMaker.Runtime
     {
         private static ContentManager _content;
         public static string CurrentSceneName { get; private set; } = string.Empty;
+        public static RuntimeScene CurrentScene { get; private set; }
 
         public static void Initialize(ContentManager content)
         {
@@ -746,8 +809,50 @@ namespace MonoGameMaker.Runtime
             string jsonPath = Path.Combine(""Scenes"", $""{cleanSceneName}.json"");
 
             // Load scene entities and assign to EntityManager
-            var entities = SceneLoader.LoadScene(jsonPath, _content);
-            EntityManager.Entities = entities;
+            CurrentScene = SceneLoader.LoadScene(jsonPath, _content);
+            EntityManager.Entities = CurrentScene != null ? CurrentScene.Entities : new List<GameEntity>();
+        }
+    }
+}
+";
+        }
+
+        private static string GetCamera2DCode()
+        {
+            return @"using System;
+using Microsoft.Xna.Framework;
+
+namespace MonoGameMaker.Runtime
+{
+    public static class Camera2D
+    {
+        public static Vector2 Position { get; set; } = Vector2.Zero;
+        
+        public static Matrix Transform => Matrix.CreateTranslation(-Position.X, -Position.Y, 0);
+
+        public static void LookAt(Vector2 target, int viewportWidth, int viewportHeight)
+        {
+            float targetX = target.X - (viewportWidth / 2f);
+            float targetY = target.Y - (viewportHeight / 2f);
+
+            int sceneWidth = viewportWidth;
+            int sceneHeight = viewportHeight;
+
+            if (SceneManager.CurrentScene != null)
+            {
+                sceneWidth = SceneManager.CurrentScene.Width;
+                sceneHeight = SceneManager.CurrentScene.Height;
+            }
+
+            float minX = 0f;
+            float maxX = Math.Max(0f, sceneWidth - viewportWidth);
+            float minY = 0f;
+            float maxY = Math.Max(0f, sceneHeight - viewportHeight);
+
+            Position = new Vector2(
+                MathHelper.Clamp(targetX, minX, maxX),
+                MathHelper.Clamp(targetY, minY, maxY)
+            );
         }
     }
 }
@@ -801,6 +906,18 @@ namespace {projectName}
             if (GamePad.GetState(PlayerIndex.One).Buttons.Back == ButtonState.Pressed || Keyboard.GetState().IsKeyDown(Keys.Escape))
                 Exit();
 
+            // Dynamically synchronize graphics backbuffer with loaded scene dimensions
+            if (SceneManager.CurrentScene != null)
+            {{
+                if (_graphics.PreferredBackBufferWidth != SceneManager.CurrentScene.Width ||
+                    _graphics.PreferredBackBufferHeight != SceneManager.CurrentScene.Height)
+                {{
+                    _graphics.PreferredBackBufferWidth = SceneManager.CurrentScene.Width;
+                    _graphics.PreferredBackBufferHeight = SceneManager.CurrentScene.Height;
+                    _graphics.ApplyChanges();
+                }}
+            }}
+
             EntityManager.Update(gameTime);
 
             base.Update(gameTime);
@@ -808,10 +925,22 @@ namespace {projectName}
 
         protected override void Draw(GameTime gameTime)
         {{
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            GraphicsDevice.Clear(SceneManager.CurrentScene?.BackgroundColor ?? Color.Black);
 
-            _spriteBatch.Begin();
+            // Draw World Space entities transformed by the Camera
+            _spriteBatch.Begin(SpriteSortMode.Deferred, BlendState.AlphaBlend, SamplerState.PointClamp, null, null, null, Camera2D.Transform);
+            
+            if (SceneManager.CurrentScene != null && SceneManager.CurrentScene.BackgroundImage != null)
+            {{
+                _spriteBatch.Draw(SceneManager.CurrentScene.BackgroundImage, new Rectangle(0, 0, SceneManager.CurrentScene.Width, SceneManager.CurrentScene.Height), Color.White);
+            }}
+            
             EntityManager.Draw(_spriteBatch, _defaultTexture);
+            _spriteBatch.End();
+
+            // Draw Screen Space user interface components
+            _spriteBatch.Begin();
+            EntityManager.DrawUI(_spriteBatch);
             _spriteBatch.End();
 
             base.Draw(gameTime);
@@ -846,6 +975,8 @@ You must adhere to the following architecture rules and constraints at all times
 4. **Behavior Script Injection**: All gameplay behaviors must be implemented as scripts inheriting from `MonoGameMaker.Runtime.IEntityScript` inside the `Scripts/` folder, and then bound to an entity by entering the script class name in its `.prefab` file.
 5. **Scene Transitions**: To dynamically change scenes (e.g. go from a Menu to a Level), call `MonoGameMaker.Runtime.SceneManager.LoadScene(""scene_name"")` (without directory prefix or .json extension).
 6. **Global State Persistence**: Use `MonoGameMaker.Runtime.GameState.Data[""VariableName""]` or helper methods `GameState.Set(""key"", value)` / `GameState.Get<T>(""key"")` to store values like Score, Health, or Lives that must survive scene transitions.
+7. **Camera Follow/LookAt**: To make the camera track the player or target, call `MonoGameMaker.Runtime.Camera2D.LookAt(playerPosition, viewportWidth, viewportHeight)` inside script Update loops.
+8. **Drawing static HUD/UI**: To render static user interface components (e.g. Healthbar, Score, text) that do not scroll with the world, implement code exclusively inside the `DrawUI(SpriteBatch spriteBatch)` method of the script.
 ";
         }
     }

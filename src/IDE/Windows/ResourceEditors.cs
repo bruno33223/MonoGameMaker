@@ -234,6 +234,11 @@ namespace {GlobalState.CurrentProjectName}.Scripts
         {{
             // Custom draw behavior logic (if needed, otherwise default texture draws)
         }}
+
+        public void DrawUI(SpriteBatch spriteBatch)
+        {{
+            // Custom UI draw behavior logic (if needed)
+        }}
     }}
 }}
 ";
