@@ -1345,6 +1345,39 @@ namespace MonoGameMaker.Runtime
         private static Texture2D _pixel;
         private static System.Collections.Generic.Dictionary<string, SpriteFont> _loadedFonts = new System.Collections.Generic.Dictionary<string, SpriteFont>(System.StringComparer.OrdinalIgnoreCase);
 
+        public static void ClearCache()
+        {
+            if (_content != null)
+            {
+                try
+                {
+                    var field = typeof(ContentManager).GetField(""loadedAssets"", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+                    if (field != null)
+                    {
+                        var loadedAssets = field.GetValue(_content) as System.Collections.Generic.Dictionary<string, object>;
+                        if (loadedAssets != null)
+                        {
+                            var keysToRemove = new System.Collections.Generic.List<string>();
+                            foreach (var kvp in loadedAssets)
+                            {
+                                if (kvp.Value is SpriteFont || kvp.Key.Contains(""Fonts/""))
+                                {
+                                    keysToRemove.Add(kvp.Key);
+                                }
+                            }
+                            foreach (var key in keysToRemove)
+                            {
+                                loadedAssets.Remove(key);
+                            }
+                        }
+                    }
+                }
+                catch {}
+            }
+            _loadedFonts.Clear();
+            Initialize(_content, _spriteBatch, _pixel);
+        }
+
         public static void Initialize(ContentManager content, SpriteBatch spriteBatch, Texture2D fallbackPixel)
         {
             _content = content;

@@ -82,13 +82,6 @@ namespace MonoGameMaker.IDE.Windows
         private static int _compiledFontSize = 14;
         private static string _compiledFontStyle = "Regular";
 
-        private static RenderTarget2D? _fontPreviewRenderTarget;
-        private static IntPtr _fontPreviewRenderTargetId = IntPtr.Zero;
-        private static SpriteBatch? _fontPreviewSpriteBatch;
-        private static SimpleServiceProvider? _fontPreviewServices;
-        private static Microsoft.Xna.Framework.Content.ContentManager? _fontPreviewContentManager;
-        private static string _loadedFontName = "";
-        private static SpriteFont? _loadedSpriteFont;
 
         private static readonly string[] _commonFonts = new[]
         {
@@ -533,7 +526,6 @@ namespace MonoGameMaker.IDE.Windows
                 {
                     GlobalState.Log($"Error loading spritefont description: {ex.Message}");
                 }
-                _loadedFontName = ""; // Force reload of preview font
             }
 
             // Render selector controls
@@ -619,7 +611,6 @@ namespace MonoGameMaker.IDE.Windows
                             _compiledFontName = _editingFontName;
                             _compiledFontSize = _editingFontSize;
                             _compiledFontStyle = _editingFontStyle;
-                            _loadedFontName = ""; // Force reload of preview font next frame
                         }
                     });
                 }
@@ -647,112 +638,41 @@ namespace MonoGameMaker.IDE.Windows
             ImGui.Dummy(new System.Numerics.Vector2(0, 5));
             ImGui.Text("WYSIWYG Preview:");
 
-            // Load SpriteFont preview if available
-            string fontNameOnly = Path.GetFileNameWithoutExtension(absolutePath);
-            if (_loadedFontName != fontNameOnly || _loadedSpriteFont == null)
-            {
-                _loadedSpriteFont = null;
-                _loadedFontName = fontNameOnly;
-                try
-                {
-                    if (_fontPreviewServices == null)
-                    {
-                        _fontPreviewServices = new SimpleServiceProvider();
-                    }
-                    string contentDir = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "bin", "DesktopGL");
-                    if (Directory.Exists(contentDir))
-                    {
-                        if (_fontPreviewContentManager != null)
-                        {
-                            _fontPreviewContentManager.Unload();
-                        }
-                        _fontPreviewContentManager = new Microsoft.Xna.Framework.Content.ContentManager(_fontPreviewServices, contentDir);
-                        _loadedSpriteFont = _fontPreviewContentManager.Load<SpriteFont>($"Fonts/{fontNameOnly}");
-                    }
-                }
-                catch
-                {
-                    _loadedSpriteFont = null;
-                }
-            }
-
-            // Setup preview RenderTarget2D & SpriteBatch
-            if (_fontPreviewRenderTarget == null || _fontPreviewRenderTarget.Width != 400 || _fontPreviewRenderTarget.Height != 130)
-            {
-                if (_fontPreviewRenderTargetId != IntPtr.Zero)
-                {
-                    TextureCache.UnbindRenderTarget(_fontPreviewRenderTargetId);
-                }
-                _fontPreviewRenderTarget?.Dispose();
-                _fontPreviewRenderTarget = new RenderTarget2D(GlobalState.GraphicsDevice!, 400, 130);
-                _fontPreviewRenderTargetId = TextureCache.BindRenderTarget(_fontPreviewRenderTarget);
-            }
-            if (_fontPreviewSpriteBatch == null)
-            {
-                _fontPreviewSpriteBatch = new SpriteBatch(GlobalState.GraphicsDevice!);
-            }
-
-            // Render Preview Text to target
-            var gd = GlobalState.GraphicsDevice!;
-            var currentTargets = gd.GetRenderTargets();
-            gd.SetRenderTarget(_fontPreviewRenderTarget);
-            gd.Clear(new Microsoft.Xna.Framework.Color(30, 30, 30));
-
-            string previewText = "ABCDEFGHIJKLM\nabcdefghijklm\n0123456789";
-            SpriteFont? drawFont = _loadedSpriteFont;
-            if (drawFont == null && _fontPreviewContentManager != null)
-            {
-                try
-                {
-                    drawFont = _fontPreviewContentManager.Load<SpriteFont>("Fonts/default");
-                }
-                catch { }
-            }
-
-            // Real-time scale logic
-            float scale = 1.0f;
-            if (_compiledFontSize > 0)
-            {
-                scale = (float)_editingFontSize / _compiledFontSize;
-            }
-
-            _fontPreviewSpriteBatch.Begin();
-            if (drawFont != null)
-            {
-                _fontPreviewSpriteBatch.DrawString(drawFont, previewText, new Vector2(10, 10), Microsoft.Xna.Framework.Color.White, 0f, Vector2.Zero, scale, Microsoft.Xna.Framework.Graphics.SpriteEffects.None, 0f);
-            }
-            _fontPreviewSpriteBatch.End();
-
-            gd.SetRenderTargets(currentTargets);
-
             ImGui.BeginChild("FontPreviewCanvas", new System.Numerics.Vector2(0, 150), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar);
             
-            System.Numerics.Vector4 textColor = new System.Numerics.Vector4(1f, 1f, 1f, 1f);
+            // ImGui-First real-time scaling
+            float baseSize = 13.0f;
+            float scaleScale = (float)_editingFontSize / baseSize;
+            if (scaleScale < 0.2f) scaleScale = 0.2f;
+            if (scaleScale > 5.0f) scaleScale = 5.0f;
+            ImGui.SetWindowFontScale(scaleScale);
+
+            string sampleText = "ABCDEFGHIJKLM\nabcdefghijklm\n0123456789";
+
+            System.Numerics.Vector4 col = new System.Numerics.Vector4(1f, 1f, 1f, 1f);
             if (_editingFontStyle == "Bold")
             {
-                textColor = new System.Numerics.Vector4(1f, 1f, 0.4f, 1f);
+                col = new System.Numerics.Vector4(1f, 0.9f, 0.4f, 1f); // bold gold
             }
             else if (_editingFontStyle == "Italic")
             {
-                textColor = new System.Numerics.Vector4(0.4f, 1f, 1f, 1f);
+                col = new System.Numerics.Vector4(0.4f, 1f, 1f, 1f); // italic cyan
             }
 
-            if (drawFont != null)
+            if (_editingFontStyle == "Bold")
             {
-                string statusMsg = _loadedSpriteFont != null ? "Active Custom Font" : "Fallback Default Font";
-                ImGui.TextColored(textColor, $"{statusMsg}: {fontNameOnly} (Size: {_editingFontSize}px, Style: {_editingFontStyle})");
-                ImGui.Separator();
-                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
-                ImGui.Image(_fontPreviewRenderTargetId, new System.Numerics.Vector2(400, 95));
+                // Simulated bold offset rendering
+                var cursor = ImGui.GetCursorPos();
+                ImGui.TextColored(col, sampleText);
+                ImGui.SetCursorPos(new System.Numerics.Vector2(cursor.X + 0.5f, cursor.Y));
+                ImGui.TextColored(col, sampleText);
             }
             else
             {
-                ImGui.TextDisabled("(Compilation required to render WYSIWYG font preview)");
-                ImGui.Separator();
-                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
-                ImGui.TextColored(textColor, previewText);
+                ImGui.TextColored(col, sampleText);
             }
-            
+
+            ImGui.SetWindowFontScale(1.0f);
             ImGui.EndChild();
         }
 
@@ -1820,21 +1740,5 @@ namespace MonoGameMaker.IDE.Windows
             }
         }
 
-        private class SimpleServiceProvider : IServiceProvider, IGraphicsDeviceService
-        {
-            public GraphicsDevice GraphicsDevice => GlobalState.GraphicsDevice!;
-
-            public event EventHandler<EventArgs>? DeviceCreated;
-            public event EventHandler<EventArgs>? DeviceDisposing;
-            public event EventHandler<EventArgs>? DeviceReset;
-            public event EventHandler<EventArgs>? DeviceResetting;
-
-            public object? GetService(Type serviceType)
-            {
-                if (serviceType == typeof(IGraphicsDeviceService))
-                    return this;
-                return null;
-            }
-        }
     }
 }

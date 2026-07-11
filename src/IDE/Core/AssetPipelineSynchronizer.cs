@@ -138,6 +138,27 @@ namespace MonoGameMaker.IDE.Core
                     // Compile compiled asset
                     RunMgcbCompile(projectRoot, logCallback);
 
+                    if (normalizedType == "Fonts")
+                    {
+                        try
+                        {
+                            var textRendererType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.TextRenderer");
+                            if (textRendererType != null)
+                            {
+                                var clearMethod = textRendererType.GetMethod("ClearCache", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                                if (clearMethod != null)
+                                {
+                                    clearMethod.Invoke(null, null);
+                                    logCallback("Cleared runtime TextRenderer loaded fonts cache.");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logCallback($"Warning: failed to clear runtime loaded fonts cache: {ex.Message}");
+                        }
+                    }
+
                     return true;
                 }
                 catch (Exception ex)
