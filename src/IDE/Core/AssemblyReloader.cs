@@ -35,6 +35,9 @@ namespace MonoGameMaker.IDE.Core
 
                 logCallback($"Building project {projectName} in background...");
 
+                // Sync core runtime templates automatically to apply engine bugfixes without recreation
+                TemplateEngine.SyncRuntimeFiles(projectRoot);
+
                 // 2. Run dotnet build
                 string dotnetPath = TemplateEngine.GetDotnetPath();
                 var psi = new ProcessStartInfo

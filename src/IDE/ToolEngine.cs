@@ -783,6 +783,9 @@ namespace MonoGameMaker.IDE
 
             GlobalState.Log("Compiling project assets and binaries...");
             
+            // Sync core runtime templates automatically to apply engine bugfixes without recreation
+            TemplateEngine.SyncRuntimeFiles(GlobalState.CurrentProjectPath);
+            
             // Build process start
             bool buildSuccess = await Task.Run(() =>
             {

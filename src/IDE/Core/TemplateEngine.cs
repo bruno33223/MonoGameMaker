@@ -1132,6 +1132,31 @@ namespace {projectName}.Scripts
 ";
         }
 
+        public static void SyncRuntimeFiles(string targetDirectory)
+        {
+            try
+            {
+                string runtimeDir = Path.Combine(targetDirectory, "Runtime");
+                if (!Directory.Exists(runtimeDir))
+                {
+                    Directory.CreateDirectory(runtimeDir);
+                }
+
+                File.WriteAllText(Path.Combine(runtimeDir, "EntityBehavior.cs"), GetEntityBehaviorCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "GameEntity.cs"), GetGameEntityCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "SharedTypes.cs"), GetSharedTypesCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "SceneLoader.cs"), GetSceneLoaderCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "EntityManager.cs"), GetEntityManagerCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "GameState.cs"), GetGameStateCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "SceneManager.cs"), GetSceneManagerCode());
+                File.WriteAllText(Path.Combine(runtimeDir, "Camera2D.cs"), GetCamera2DCode());
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error syncing runtime files: {ex.Message}");
+            }
+        }
+
         private static string GetAiManifestTemplate(string projectName)
         {
             return $@"# AI Architecture Manifest & Rules - {projectName}
