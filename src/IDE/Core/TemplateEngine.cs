@@ -142,6 +142,14 @@ namespace MonoGameMaker.IDE.Core
                 string game1Path = Path.Combine(targetDirectory, "Game1.cs");
                 File.WriteAllText(game1Path, GetGame1Code(projectName));
 
+                // 7.5. Inject AI architecture manifests
+                logCallback("Generating AI architecture manifests (.cursorrules and AI_ARCHITECTURE.md)...");
+                string cursorRulesPath = Path.Combine(targetDirectory, ".cursorrules");
+                string aiArchPath = Path.Combine(targetDirectory, "AI_ARCHITECTURE.md");
+                string manifestContent = GetAiManifestTemplate(projectName);
+                File.WriteAllText(cursorRulesPath, manifestContent, System.Text.Encoding.UTF8);
+                File.WriteAllText(aiArchPath, manifestContent, System.Text.Encoding.UTF8);
+
                 // 8. Restore the project
                 logCallback("Running dotnet restore on the scaffolded project...");
                 var restoreProcessInfo = new ProcessStartInfo
@@ -465,6 +473,32 @@ namespace {projectName}
         }}
     }}
 }}
+";
+        }
+
+        private static string GetAiManifestTemplate(string projectName)
+        {
+            return $@"# AI Architecture Manifest & Rules - {projectName}
+
+You are an AI assistant helping a developer build gameplay features in this project.
+This project uses MonoGame DesktopGL (.NET 8.0) and is structured as a data-driven engine.
+You must adhere to the following architecture rules and constraints at all times.
+
+## Project Context
+- **Framework**: MonoGame DesktopGL (.NET 8.0)
+- **Architecture**: Data-Driven entity prefab system. All entities in scenes are instances of Prefabs.
+
+## Folder Taxonomy
+- `Content/Textures/`: Holds raw image assets (`.png`, `.jpg`, `.jpeg`). Never place gameplay configuration files here.
+- `Prefabs/`: Holds JSON metadata files (with `.prefab` extension) containing `TextureName` (pointing to textures in Content/Textures), `ScriptName` (pointing to script classes in Scripts folder), and optional `Tag`.
+- `Content/Scenes/`: Holds level/scene JSON layouts (specifically `scene_init.json`), which instance Prefabs by referencing their `prefabName` and specifying their `x` and `y` coordinates.
+- `Scripts/`: Holds pure C# script behavior classes implementing the `MonoGameMaker.Runtime.IEntityScript` interface.
+
+## Hard Architectural Rules
+1. **NO Game1.cs Modifications**: Never modify `Game1.cs` to add custom gameplay logic or variables. It acts solely as the boilerplate engine bootstrap.
+2. **NO Raw Texture Instancing**: Never instance a raw texture directly in `scene_init.json`. You MUST create a `.prefab` file inside the `Prefabs` directory that references the texture, and instance that prefab instead.
+3. **MGCB Asset Registry**: To add or use any texture or audio asset, place it in the appropriate folder and make sure it is registered in `Content/Content.mgcb` so the MonoGame Content Builder compiler can compile it.
+4. **Behavior Script Injection**: All gameplay behaviors must be implemented as scripts inheriting from `MonoGameMaker.Runtime.IEntityScript` inside the `Scripts/` folder, and then bound to an entity by entering the script class name in its `.prefab` file.
 ";
         }
     }

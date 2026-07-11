@@ -42,7 +42,7 @@ namespace TestConsole
             }
 
             // Verify folder structure
-            string[] expectedDirs = new[] { "Content/Textures", "Content/Audio", "Content/Models", "Content/Scenes", "Scripts", "Runtime" };
+            string[] expectedDirs = new[] { "Content/Textures", "Content/Audio", "Content/Models", "Content/Scenes", "Scripts", "Runtime", "Prefabs" };
             foreach (var dir in expectedDirs)
             {
                 string path = Path.Combine(projectDir, dir);
@@ -52,7 +52,25 @@ namespace TestConsole
                     Environment.Exit(1);
                 }
             }
-            Console.WriteLine("TEST PASSED: Folder structure created successfully.");
+
+            // Verify AI architecture manifests
+            string cursorrulesPath = Path.Combine(projectDir, ".cursorrules");
+            string aiArchitecturePath = Path.Combine(projectDir, "AI_ARCHITECTURE.md");
+            if (!File.Exists(cursorrulesPath) || !File.Exists(aiArchitecturePath))
+            {
+                Console.WriteLine("TEST FAILED: AI architecture manifests (.cursorrules or AI_ARCHITECTURE.md) were not created.");
+                Environment.Exit(1);
+            }
+
+            // Check contents
+            string cursorrulesContent = File.ReadAllText(cursorrulesPath);
+            if (!cursorrulesContent.Contains("AI Architecture Manifest & Rules") || !cursorrulesContent.Contains("NO Game1.cs Modifications"))
+            {
+                Console.WriteLine("TEST FAILED: AI architecture manifest content is invalid or missing rules.");
+                Environment.Exit(1);
+            }
+
+            Console.WriteLine("TEST PASSED: Folder structure and AI architecture manifests created successfully.");
 
             // 2. Create mock asset (2x2 red BMP renamed to png)
             Console.WriteLine("\n[TEST 2] Generating mock sprite image...");
