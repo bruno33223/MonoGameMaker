@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using ImGuiNET;
 using System.IO;
 using MonoGameMaker.IDE.Core;
+using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE.Windows
 {

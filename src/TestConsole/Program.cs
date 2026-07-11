@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using MonoGameMaker.IDE.Core;
+using MonoGameMaker.Runtime;
 
 namespace TestConsole
 {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using Microsoft.Xna.Framework.Graphics;
+using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE.Core
 {
@@ -16,6 +17,7 @@ namespace MonoGameMaker.IDE.Core
         public static HashSet<string> OpenResources { get; } = new();
         public static bool IsPlaying { get; set; } = false;
         public static SceneSerializer.EntityInstance? SelectedNode { get; set; }
+        public static List<GameEntity> SimEntities { get; } = new();
         
         public static readonly List<string> ConsoleLogs = new();
         public static Process? RunningGameProcess { get; set; }

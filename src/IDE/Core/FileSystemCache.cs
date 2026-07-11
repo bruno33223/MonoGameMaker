@@ -61,6 +61,11 @@ namespace MonoGameMaker.IDE.Core
 
         private void OnFileSystemChanged(object? sender, FileSystemEventArgs e)
         {
+            if (e.FullPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            {
+                Task.Run(() => AssemblyReloader.CompileAndLoad(GlobalState.CurrentProjectPath, GlobalState.Log));
+            }
+
             if (_debounceTimer == null) return;
             if (AssetPipelineSynchronizer.IsProcessing) return;
             if (ToolEngine.IsPlaying) return;

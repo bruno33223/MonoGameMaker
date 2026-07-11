@@ -1,8 +1,11 @@
 using System;
+using System.IO;
 using System.Reflection;
+using System.Collections.Generic;
 using ImGuiNET;
 using Microsoft.Xna.Framework;
 using MonoGameMaker.IDE.Core;
+using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE.Windows
 {
@@ -51,7 +54,7 @@ namespace MonoGameMaker.IDE.Windows
             {
                 if (ImGui.CollapsingHeader("Custom Properties", ImGuiTreeNodeFlags.DefaultOpen))
                 {
-                    var keys = new System.Collections.Generic.List<string>(node.CustomProperties.Keys);
+                    var keys = new List<string>(node.CustomProperties.Keys);
                     foreach (var key in keys)
                     {
                         string val = node.CustomProperties[key];
@@ -66,26 +69,74 @@ namespace MonoGameMaker.IDE.Windows
                 }
             }
 
-            // --- Attached Components (IDE Component subclasses) ---
-            if (node.Components.Count == 0)
+            // --- Behavior Script details ---
+            if (GlobalState.CurrentProjectPath != null)
             {
-                ImGui.Dummy(new System.Numerics.Vector2(0, 6));
-                ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f), "No IDE components attached.");
-                ImGui.TextDisabled("Components are C# classes that inherit Component");
-                ImGui.TextDisabled("and are listed in the scene JSON 'components' array.");
-            }
-            else
-            {
-                foreach (var comp in node.Components)
+                string prefabPath = Path.Combine(GlobalState.CurrentProjectPath, "Prefabs", $"{node.prefabName}.prefab");
+                MonoGameMaker.Runtime.PrefabData? prefabData = null;
+                if (File.Exists(prefabPath))
                 {
-                    bool compEnabled = comp.Enabled;
-                    if (ImGui.Checkbox($"##{comp.GetType().Name}_{idSuffix}_en", ref compEnabled))
-                        comp.Enabled = compEnabled;
-                    ImGui.SameLine();
-                    if (ImGui.CollapsingHeader($"{comp.GetType().Name}##{idSuffix}", ImGuiTreeNodeFlags.DefaultOpen))
+                    try
                     {
-                        DrawComponentFields(comp, idSuffix);
+                        string prefabJson = File.ReadAllText(prefabPath);
+                        prefabData = System.Text.Json.JsonSerializer.Deserialize<MonoGameMaker.Runtime.PrefabData>(prefabJson);
                     }
+                    catch {}
+                }
+
+                if (prefabData != null && !string.IsNullOrEmpty(prefabData.ScriptName))
+                {
+                    ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+                    ImGui.Separator();
+                    ImGui.TextColored(new System.Numerics.Vector4(0.2f, 0.8f, 0.2f, 1f), $"Script: {prefabData.ScriptName}");
+
+                    // If simulation is running, we can inspect active script variables!
+                    if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
+                    {
+                        object? activeScriptInstance = null;
+                        Type? entityManagerType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.EntityManager");
+                        if (entityManagerType != null)
+                        {
+                            var entitiesField = entityManagerType.GetField("Entities", BindingFlags.Public | BindingFlags.Static);
+                            if (entitiesField != null)
+                            {
+                                var list = (System.Collections.IList?)entitiesField.GetValue(null);
+                                if (list != null)
+                                {
+                                    foreach (var entity in list)
+                                    {
+                                        if (entity != null)
+                                        {
+                                            var prefabNameProp = entity.GetType().GetProperty("PrefabName");
+                                            string? pName = prefabNameProp?.GetValue(entity) as string;
+                                            if (pName == node.prefabName)
+                                            {
+                                                var scriptProp = entity.GetType().GetProperty("Script");
+                                                activeScriptInstance = scriptProp?.GetValue(entity);
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        if (activeScriptInstance != null)
+                        {
+                            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+                            ImGui.Text("Runtime values:");
+                            DrawObjectFields(activeScriptInstance, idSuffix);
+                        }
+                        else
+                        {
+                            ImGui.TextDisabled("Script instance not active in simulation.");
+                        }
+                    }
+                }
+                else
+                {
+                    ImGui.Dummy(new System.Numerics.Vector2(0, 6));
+                    ImGui.TextDisabled("No behavior script assigned to this prefab.");
                 }
             }
 
@@ -97,16 +148,16 @@ namespace MonoGameMaker.IDE.Windows
             ImGui.EndTabItem();
         }
 
-        private static void DrawComponentFields(Component comp, string idSuffix)
+        private static void DrawObjectFields(object obj, string idSuffix)
         {
-            Type type = comp.GetType();
+            Type type = obj.GetType();
             string id = $"{type.Name}_{idSuffix}";
 
             // Public fields
             var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance);
             foreach (var field in fields)
             {
-                object? val = field.GetValue(comp);
+                object? val = field.GetValue(obj);
                 if (val == null) continue;
 
                 ImGui.Text(field.Name);
@@ -117,39 +168,39 @@ namespace MonoGameMaker.IDE.Windows
                 {
                     int intVal = (int)val;
                     if (ImGui.DragInt($"##F_{id}_{field.Name}", ref intVal))
-                        field.SetValue(comp, intVal);
+                        field.SetValue(obj, intVal);
                 }
                 else if (field.FieldType == typeof(float))
                 {
                     float floatVal = (float)val;
                     if (ImGui.DragFloat($"##F_{id}_{field.Name}", ref floatVal, 0.1f))
-                        field.SetValue(comp, floatVal);
+                        field.SetValue(obj, floatVal);
                 }
                 else if (field.FieldType == typeof(bool))
                 {
                     bool boolVal = (bool)val;
                     if (ImGui.Checkbox($"##F_{id}_{field.Name}", ref boolVal))
-                        field.SetValue(comp, boolVal);
+                        field.SetValue(obj, boolVal);
                 }
                 else if (field.FieldType == typeof(string))
                 {
                     string strVal = (string)val;
                     if (ImGui.InputText($"##F_{id}_{field.Name}", ref strVal, 256))
-                        field.SetValue(comp, strVal);
+                        field.SetValue(obj, strVal);
                 }
                 else if (field.FieldType == typeof(Vector2))
                 {
                     Vector2 vecVal = (Vector2)val;
                     System.Numerics.Vector2 numVec = new(vecVal.X, vecVal.Y);
                     if (ImGui.DragFloat2($"##F_{id}_{field.Name}", ref numVec, 0.1f))
-                        field.SetValue(comp, new Vector2(numVec.X, numVec.Y));
+                        field.SetValue(obj, new Vector2(numVec.X, numVec.Y));
                 }
                 else if (field.FieldType == typeof(Color))
                 {
                     Color colVal = (Color)val;
                     System.Numerics.Vector4 numCol = new(colVal.R / 255f, colVal.G / 255f, colVal.B / 255f, colVal.A / 255f);
                     if (ImGui.ColorEdit4($"##F_{id}_{field.Name}", ref numCol))
-                        field.SetValue(comp, new Color(numCol.X, numCol.Y, numCol.Z, numCol.W));
+                        field.SetValue(obj, new Color(numCol.X, numCol.Y, numCol.Z, numCol.W));
                 }
                 else
                 {
@@ -157,14 +208,13 @@ namespace MonoGameMaker.IDE.Windows
                 }
             }
 
-            // Public read-write properties (skip framework internals)
+            // Public read-write properties
             var props = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
             foreach (var prop in props)
             {
                 if (!prop.CanRead || !prop.CanWrite) continue;
-                if (prop.Name is "Parent" or "Enabled" or "Time" or "Input") continue;
 
-                object? val = prop.GetValue(comp);
+                object? val = prop.GetValue(obj);
                 if (val == null) continue;
 
                 ImGui.Text(prop.Name);
@@ -175,39 +225,39 @@ namespace MonoGameMaker.IDE.Windows
                 {
                     int intVal = (int)val;
                     if (ImGui.DragInt($"##P_{id}_{prop.Name}", ref intVal))
-                        prop.SetValue(comp, intVal);
+                        prop.SetValue(obj, intVal);
                 }
                 else if (prop.PropertyType == typeof(float))
                 {
                     float floatVal = (float)val;
                     if (ImGui.DragFloat($"##P_{id}_{prop.Name}", ref floatVal, 0.1f))
-                        prop.SetValue(comp, floatVal);
+                        prop.SetValue(obj, floatVal);
                 }
                 else if (prop.PropertyType == typeof(bool))
                 {
                     bool boolVal = (bool)val;
                     if (ImGui.Checkbox($"##P_{id}_{prop.Name}", ref boolVal))
-                        prop.SetValue(comp, boolVal);
+                        prop.SetValue(obj, boolVal);
                 }
                 else if (prop.PropertyType == typeof(string))
                 {
                     string strVal = (string)val;
                     if (ImGui.InputText($"##P_{id}_{prop.Name}", ref strVal, 256))
-                        prop.SetValue(comp, strVal);
+                        prop.SetValue(obj, strVal);
                 }
                 else if (prop.PropertyType == typeof(Vector2))
                 {
                     Vector2 vecVal = (Vector2)val;
                     System.Numerics.Vector2 numVec = new(vecVal.X, vecVal.Y);
                     if (ImGui.DragFloat2($"##P_{id}_{prop.Name}", ref numVec, 0.1f))
-                        prop.SetValue(comp, new Vector2(numVec.X, numVec.Y));
+                        prop.SetValue(obj, new Vector2(numVec.X, numVec.Y));
                 }
                 else if (prop.PropertyType == typeof(Color))
                 {
                     Color colVal = (Color)val;
                     System.Numerics.Vector4 numCol = new(colVal.R / 255f, colVal.G / 255f, colVal.B / 255f, colVal.A / 255f);
                     if (ImGui.ColorEdit4($"##P_{id}_{prop.Name}", ref numCol))
-                        prop.SetValue(comp, new Color(numCol.X, numCol.Y, numCol.Z, numCol.W));
+                        prop.SetValue(obj, new Color(numCol.X, numCol.Y, numCol.Z, numCol.W));
                 }
                 else
                 {

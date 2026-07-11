@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Reflection;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.Xna.Framework;
@@ -7,6 +9,7 @@ using Microsoft.Xna.Framework.Graphics;
 using ImGuiNET;
 using MonoGameMaker.IDE.Core;
 using MonoGameMaker.IDE.Windows;
+using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE
 {
@@ -100,80 +103,167 @@ namespace MonoGameMaker.IDE
 
             if (GlobalState.IsPlaying && !_wasPlaying)
             {
-                var activeScene = GetActiveScene();
-                if (activeScene != null)
+                // Transition to play: compile and load DLL first
+                bool buildSuccess = AssemblyReloader.CompileAndLoad(GlobalState.CurrentProjectPath, GlobalState.Log);
+                if (!buildSuccess && AssemblyReloader.LoadedAssembly == null)
                 {
-                    GlobalState.Log("Simulating Active Scene Components (Play Mode)");
-                    foreach (var inst in activeScene.Instances)
+                    GlobalState.Log("Error: Could not start simulation because compilation failed and no previous assembly was loaded.");
+                    GlobalState.IsPlaying = false;
+                    _wasPlaying = false;
+                }
+                else
+                {
+                    var activeScene = GetActiveScene();
+                    if (activeScene != null)
                     {
-                        foreach (var comp in inst.Components)
-                        {
-                            comp.Time = gameTime;
-                            comp.Input = _inputManager;
+                        GlobalState.Log("Simulating Active Scene (Play Mode)");
+                        GlobalState.SimEntities.Clear();
 
-                            if (comp.Enabled)
-                            {
-                                try
-                                {
-                                    comp.Awake();
-                                }
-                                catch (Exception ex)
-                                {
-                                    GlobalState.Log($"Error in Component Awake on {inst.prefabName}: {ex.Message}");
-                                    comp.Enabled = false;
-                                }
-                            }
-                        }
-                    }
-                    foreach (var inst in activeScene.Instances)
-                    {
-                        foreach (var comp in inst.Components)
+                        // 1. Resolve target project's EntityManager from loaded assembly
+                        Type? entityManagerType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.EntityManager");
+                        if (entityManagerType != null)
                         {
-                            comp.Time = gameTime;
-                            comp.Input = _inputManager;
+                            var clearMethod = entityManagerType.GetMethod("Clear", BindingFlags.Public | BindingFlags.Static);
+                            clearMethod?.Invoke(null, null);
 
-                            if (comp.Enabled)
+                            var entitiesField = entityManagerType.GetField("Entities", BindingFlags.Public | BindingFlags.Static);
+                            if (entitiesField != null)
                             {
-                                try
+                                var targetList = (System.Collections.IList?)entitiesField.GetValue(null);
+
+                                foreach (var inst in activeScene.Instances)
                                 {
-                                    comp.Start();
-                                }
-                                catch (Exception ex)
-                                {
-                                    GlobalState.Log($"Error in Component Start on {inst.prefabName}: {ex.Message}");
-                                    comp.Enabled = false;
+                                    // Resolve prefab data
+                                    string prefabPath = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs", $"{inst.prefabName}.prefab");
+                                    PrefabData prefabData = new PrefabData();
+                                    if (File.Exists(prefabPath))
+                                    {
+                                        try
+                                        {
+                                            string prefabJson = File.ReadAllText(prefabPath);
+                                            var deserialized = System.Text.Json.JsonSerializer.Deserialize<PrefabData>(prefabJson);
+                                            if (deserialized != null) prefabData = deserialized;
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            GlobalState.Log($"Error reading prefab {inst.prefabName}: {ex.Message}");
+                                        }
+                                    }
+
+                                    // Resolve texture
+                                    Texture2D? texture = null;
+                                    if (!string.IsNullOrEmpty(prefabData.TextureName))
+                                    {
+                                        string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", prefabData.TextureName + ".png");
+                                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", prefabData.TextureName + ".jpg");
+                                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", prefabData.TextureName + ".jpeg");
+                                        texture = TextureCache.GetTexture(texPath);
+                                    }
+
+                                    // Resolve script type using Reflection over AssemblyReloader.LoadedAssembly
+                                    IEntityScript? scriptInstance = null;
+                                    if (!string.IsNullOrEmpty(prefabData.ScriptName))
+                                    {
+                                        try
+                                        {
+                                            Type? scriptType = AssemblyReloader.LoadedAssembly.GetType(prefabData.ScriptName);
+                                            if (scriptType == null)
+                                            {
+                                                scriptType = AssemblyReloader.LoadedAssembly.GetType(AssemblyReloader.LoadedAssembly.GetName().Name + "." + prefabData.ScriptName);
+                                            }
+                                            if (scriptType == null)
+                                            {
+                                                scriptType = AssemblyReloader.LoadedAssembly.GetType(AssemblyReloader.LoadedAssembly.GetName().Name + ".Scripts." + prefabData.ScriptName);
+                                            }
+
+                                            if (scriptType != null && typeof(IEntityScript).IsAssignableFrom(scriptType))
+                                            {
+                                                scriptInstance = (IEntityScript)Activator.CreateInstance(scriptType);
+                                            }
+                                            else
+                                            {
+                                                GlobalState.Log($"Warning: Script type '{prefabData.ScriptName}' not found in assembly or does not implement IEntityScript.");
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            GlobalState.Log($"Error resolving script {prefabData.ScriptName}: {ex.Message}");
+                                        }
+                                    }
+
+                                    // Merge properties
+                                    var mergedProps = new Dictionary<string, string>();
+                                    if (prefabData.CustomProperties != null)
+                                    {
+                                        foreach (var kv in prefabData.CustomProperties) mergedProps[kv.Key] = kv.Value;
+                                    }
+                                    if (inst.CustomProperties != null)
+                                    {
+                                        foreach (var kv in inst.CustomProperties) mergedProps[kv.Key] = kv.Value;
+                                    }
+
+                                    // Create GameEntity
+                                    var gameEntity = new GameEntity
+                                    {
+                                        PrefabName = inst.prefabName,
+                                        Texture = texture,
+                                        Position = new Vector2(inst.x, inst.y),
+                                        Script = scriptInstance,
+                                        Tag = prefabData.Tag ?? "Default"
+                                    };
+
+                                    // Initialize script
+                                    if (scriptInstance != null)
+                                    {
+                                        try
+                                        {
+                                            scriptInstance.Initialize(gameEntity, mergedProps);
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            GlobalState.Log($"Error calling script Initialize on {inst.prefabName}: {ex.Message}");
+                                        }
+                                    }
+
+                                    if (targetList != null)
+                                    {
+                                        targetList.Add(gameEntity);
+                                    }
                                 }
                             }
                         }
                     }
                 }
             }
+
+            // Transition from play to edit: reload scene to restore positions
+            if (!GlobalState.IsPlaying && _wasPlaying)
+            {
+                if (GlobalState.CurrentProjectPath != null && GlobalState.SelectedResourcePath != null)
+                {
+                    string absolutePath = Path.Combine(GlobalState.CurrentProjectPath, GlobalState.SelectedResourcePath);
+                    ResourceEditors.ReloadScene(absolutePath);
+                }
+            }
+
             _wasPlaying = GlobalState.IsPlaying;
 
             if (GlobalState.IsPlaying)
             {
-                var activeScene = GetActiveScene();
-                if (activeScene != null)
+                // Run target project's EntityManager.Update via reflection
+                Type? entityManagerType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.EntityManager");
+                if (entityManagerType != null)
                 {
-                    foreach (var inst in activeScene.Instances)
+                    var updateMethod = entityManagerType.GetMethod("Update", BindingFlags.Public | BindingFlags.Static);
+                    if (updateMethod != null)
                     {
-                        foreach (var comp in inst.Components)
+                        try
                         {
-                            comp.Time = gameTime;
-                            comp.Input = _inputManager;
-
-                            if (comp.Enabled)
-                            {
-                                try
-                                {
-                                    comp.Update(gameTime);
-                                }
-                                catch (Exception ex)
-                                {
-                                    GlobalState.Log($"Error in Component Update on {inst.prefabName}: {ex.Message}");
-                                    comp.Enabled = false;
-                                }
-                            }
+                            updateMethod.Invoke(null, new object[] { gameTime });
+                        }
+                        catch (Exception ex)
+                        {
+                            GlobalState.Log($"Error executing simulation loop: {ex.Message}");
                         }
                     }
                 }

@@ -17,25 +17,6 @@ namespace MonoGameMaker.IDE.Core
             // Backward compatibility properties
             public string? assetId { get; set; }
             public string? spriteName { get; set; }
-
-            [System.Text.Json.Serialization.JsonIgnore]
-            public List<Component> Components { get; set; } = new();
-
-            public T AddComponent<T>() where T : Component, new()
-            {
-                var component = new T { Parent = this };
-                Components.Add(component);
-                return component;
-            }
-
-            public T? GetComponent<T>() where T : Component
-            {
-                foreach (var comp in Components)
-                {
-                    if (comp is T tComp) return tComp;
-                }
-                return null;
-            }
         }
 
         public class SceneData
@@ -194,45 +175,6 @@ namespace MonoGameMaker.IDE.Core
                                 foreach (var subProp in prop.Value.EnumerateObject())
                                 {
                                     inst.CustomProperties[subProp.Name] = subProp.Value.ToString();
-                                }
-                            }
-                            break;
-                        case "components":
-                            if (prop.Value.ValueKind == JsonValueKind.Array)
-                            {
-                                foreach (var compElement in prop.Value.EnumerateArray())
-                                {
-                                    if (compElement.TryGetProperty("type", out var typeProp))
-                                    {
-                                        string typeName = typeProp.GetString() ?? "";
-                                        try
-                                        {
-                                            Type? componentType = null;
-                                            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-                                            {
-                                                var t = assembly.GetType(typeName);
-                                                if (t == null) t = assembly.GetType("MonoGameMaker.IDE.Core." + typeName);
-                                                if (t != null)
-                                                {
-                                                    componentType = t;
-                                                    break;
-                                                }
-                                            }
-                                            if (componentType != null && typeof(Component).IsAssignableFrom(componentType))
-                                            {
-                                                var compInstance = (Component?)Activator.CreateInstance(componentType);
-                                                if (compInstance != null)
-                                                {
-                                                    compInstance.Parent = inst;
-                                                    inst.Components.Add(compInstance);
-                                                }
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            logCallback($"Error deserializing component {typeName}: {ex.Message}");
-                                        }
-                                    }
                                 }
                             }
                             break;

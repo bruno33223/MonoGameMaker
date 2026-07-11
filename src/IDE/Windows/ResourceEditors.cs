@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using ImGuiNET;
@@ -9,6 +10,7 @@ using ImGuiColorTextEditNet;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGameMaker.IDE.Core;
+using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE.Windows
 {
@@ -40,6 +42,16 @@ namespace MonoGameMaker.IDE.Windows
                 return state.Scene;
             }
             return null;
+        }
+
+        public static void ReloadScene(string absolutePath)
+        {
+            if (_sceneStates.TryGetValue(absolutePath, out var state))
+            {
+                state.Scene = SceneSerializer.LoadScenePath(absolutePath, GlobalState.Log);
+                GlobalState.SelectedNode = null;
+                state.SelectedIndex = -1;
+            }
         }
         
         private static string _newScriptName = "Script1";
@@ -1051,7 +1063,22 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 var clearColor = new Color(state.Scene.BackgroundColor.X, state.Scene.BackgroundColor.Y, state.Scene.BackgroundColor.Z);
                 GlobalState.GraphicsDevice.Clear(clearColor);
 
-                state.SpriteBatch!.Begin();
+                // Determine camera matrix
+                Matrix cameraTransform = Matrix.Identity;
+                if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
+                {
+                    Type? cameraType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.Camera2D");
+                    if (cameraType != null)
+                    {
+                        var transformProp = cameraType.GetProperty("Transform", BindingFlags.Public | BindingFlags.Static);
+                        if (transformProp != null)
+                        {
+                            cameraTransform = (Matrix)transformProp.GetValue(null);
+                        }
+                    }
+                }
+
+                state.SpriteBatch!.Begin(transformMatrix: cameraTransform);
 
                 // 1. Draw static background image (if set)
                 if (!string.IsNullOrEmpty(state.Scene.BackgroundImage))
@@ -1081,75 +1108,114 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     }
                 }
 
-                // 3. Draw instances
-                for (int i = 0; i < state.Scene.Instances.Count; i++)
+                // 3. Draw Simulation or Static editor instances
+                if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
                 {
-                    var inst = state.Scene.Instances[i];
-                    
-                    // Look up prefab properties
-                    string pPath = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs", inst.prefabName + ".prefab");
-                    PrefabData pData = PrefabCache.GetPrefab(pPath);
-
-                    string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".png");
-                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpg");
-                    if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpeg");
-
-                    Texture2D? texture = TextureCache.GetTexture(texPath);
-                    
-                    float drawW = 64f;
-                    float drawH = 64f;
-                    if (texture != null)
+                    Type? entityManagerType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.EntityManager");
+                    if (entityManagerType != null)
                     {
-                        drawW = texture.Width;
-                        drawH = texture.Height;
-                        state.SpriteBatch.Draw(texture, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, (int)drawH), Color.White);
-                    }
-                    else
-                    {
-                        state.SpriteBatch.Draw(state.FallbackTexture!, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, (int)drawH), Color.White);
-                    }
-
-                    // 4. Draw selection Bounding Box visual highlight (yellow)
-                    if (state.SelectedIndex == i && GlobalState.PixelTexture != null)
-                    {
-                        int borderThickness = 2;
-                        Color borderCol = Color.Yellow;
-
-                        // Top border
-                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, borderThickness), borderCol);
-                        // Bottom border
-                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y + (int)drawH - borderThickness, (int)drawW, borderThickness), borderCol);
-                        // Left border
-                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y, borderThickness, (int)drawH), borderCol);
-                        // Right border
-                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x + (int)drawW - borderThickness, (int)inst.y, borderThickness, (int)drawH), borderCol);
+                        var drawMethod = entityManagerType.GetMethod("Draw", BindingFlags.Public | BindingFlags.Static);
+                        if (drawMethod != null)
+                        {
+                            try
+                            {
+                                drawMethod.Invoke(null, new object[] { state.SpriteBatch, state.FallbackTexture });
+                            }
+                            catch (Exception ex)
+                            {
+                                GlobalState.Log($"Error executing simulation Draw: {ex.Message}");
+                            }
+                        }
                     }
                 }
-
-                // 5. Draw simulation components if playing
-                if (GlobalState.IsPlaying)
+                else
                 {
-                    foreach (var inst in state.Scene.Instances)
+                    // Draw static instances
+                    for (int i = 0; i < state.Scene.Instances.Count; i++)
                     {
-                        foreach (var comp in inst.Components)
+                        var inst = state.Scene.Instances[i];
+                        
+                        // Look up prefab properties
+                        string pPath = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs", inst.prefabName + ".prefab");
+                        PrefabData pData = PrefabCache.GetPrefab(pPath);
+
+                        string texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".png");
+                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpg");
+                        if (!File.Exists(texPath)) texPath = Path.Combine(GlobalState.CurrentProjectPath!, "Content", "Textures", pData.TextureName + ".jpeg");
+
+                        Texture2D? texture = TextureCache.GetTexture(texPath);
+                        
+                        float drawW = 64f;
+                        float drawH = 64f;
+                        if (texture != null)
                         {
-                            if (comp.Enabled)
-                            {
-                                try
-                                {
-                                    comp.Draw(state.SpriteBatch);
-                                }
-                                catch (Exception ex)
-                                {
-                                    GlobalState.Log($"Error in Component Draw on {inst.prefabName}: {ex.Message}");
-                                    comp.Enabled = false;
-                                }
-                            }
+                            drawW = texture.Width;
+                            drawH = texture.Height;
+                            state.SpriteBatch.Draw(texture, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, (int)drawH), Color.White);
+                        }
+                        else
+                        {
+                            state.SpriteBatch.Draw(state.FallbackTexture!, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, (int)drawH), Color.White);
+                        }
+
+                        // 4. Draw selection Bounding Box visual highlight (yellow)
+                        if (state.SelectedIndex == i && GlobalState.PixelTexture != null)
+                        {
+                            int borderThickness = 2;
+                            Color borderCol = Color.Yellow;
+
+                            // Top border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, borderThickness), borderCol);
+                            // Bottom border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y + (int)drawH - borderThickness, (int)drawW, borderThickness), borderCol);
+                            // Left border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y, borderThickness, (int)drawH), borderCol);
+                            // Right border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x + (int)drawW - borderThickness, (int)inst.y, borderThickness, (int)drawH), borderCol);
                         }
                     }
                 }
 
                 state.SpriteBatch.End();
+
+                // 5. Draw simulation UI (Screen Space) if playing
+                if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
+                {
+                    Type? entityManagerType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.EntityManager");
+                    if (entityManagerType != null)
+                    {
+                        var entitiesField = entityManagerType.GetField("Entities", BindingFlags.Public | BindingFlags.Static);
+                        if (entitiesField != null)
+                        {
+                            var list = (System.Collections.IList?)entitiesField.GetValue(null);
+                            if (list != null && list.Count > 0)
+                            {
+                                state.SpriteBatch.Begin();
+                                foreach (var entity in list)
+                                {
+                                    if (entity != null)
+                                    {
+                                        var scriptProp = entity.GetType().GetProperty("Script");
+                                        var scriptVal = scriptProp?.GetValue(entity);
+                                        if (scriptVal != null)
+                                        {
+                                            var drawUiMethod = scriptVal.GetType().GetMethod("DrawUI");
+                                            try
+                                            {
+                                                drawUiMethod?.Invoke(scriptVal, new object[] { state.SpriteBatch });
+                                            }
+                                            catch (Exception ex)
+                                            {
+                                                GlobalState.Log($"Error executing simulation DrawUI: {ex.Message}");
+                                            }
+                                        }
+                                    }
+                                }
+                                state.SpriteBatch.End();
+                            }
+                        }
+                    }
+                }
                 GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
 
                 // Viewport mouse and coordinate translations

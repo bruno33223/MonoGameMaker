@@ -84,12 +84,28 @@ namespace MonoGameMaker.IDE.Core
                 // 3. Edit csproj:
                 // - Change TargetFramework to net8.0
                 // - Add CopyToOutputDirectory directives for Scenes and Prefabs
+                // - Add Reference to IDE.dll with Private=False
                 logCallback("Updating csproj configuration for target framework, scenes, and prefabs...");
                 string csprojContent = File.ReadAllText(csprojPath);
                 
                 csprojContent = Regex.Replace(csprojContent, @"<TargetFramework>.*?</TargetFramework>", "<TargetFramework>net8.0</TargetFramework>");
 
-                string copyDirectives = @"
+                string ideDllPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "IDE.dll");
+                if (!File.Exists(ideDllPath))
+                {
+                    ideDllPath = typeof(TemplateEngine).Assembly.Location;
+                }
+
+                string copyDirectives = $@"
+  <PropertyGroup>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include=""IDE"">
+      <HintPath>{ideDllPath}</HintPath>
+      <Private>False</Private>
+    </Reference>
+  </ItemGroup>
   <ItemGroup>
     <None Update=""Content\Scenes\**\*.*"">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -127,12 +143,9 @@ namespace MonoGameMaker.IDE.Core
                 }
 
                 // 6. Inject Runtime folders and files
-                logCallback("Injecting SceneLoader and IEntityScript runtime scripts...");
+                logCallback("Injecting SceneLoader and runtime scripts...");
                 string runtimeDir = Path.Combine(targetDirectory, "Runtime");
                 Directory.CreateDirectory(runtimeDir);
-                
-                string iEntityScriptPath = Path.Combine(runtimeDir, "IEntityScript.cs");
-                File.WriteAllText(iEntityScriptPath, GetIEntityScriptCode());
 
                 string sceneLoaderPath = Path.Combine(runtimeDir, "SceneLoader.cs");
                 File.WriteAllText(sceneLoaderPath, GetSceneLoaderCode());
@@ -440,53 +453,6 @@ namespace MonoGameMaker.Runtime
                 Entities = entities
             };
         }
-    }
-
-    public class RuntimeScene
-    {
-        public int Width { get; set; } = 1280;
-        public int Height { get; set; } = 720;
-        public Color BackgroundColor { get; set; } = Color.CornflowerBlue;
-        public Texture2D BackgroundImage { get; set; }
-        public List<GameEntity> Entities { get; set; } = new List<GameEntity>();
-    }
-
-    public class SceneData
-    {
-        public int Width { get; set; } = 1280;
-        public int Height { get; set; } = 720;
-        public System.Numerics.Vector3 BackgroundColor { get; set; }
-        public string BackgroundImage { get; set; } = string.Empty;
-        public List<EntityInstance> Instances { get; set; } = new List<EntityInstance>();
-    }
-
-    public class EntityInstance
-    {
-        public string prefabName { get; set; } = string.Empty;
-        public float x { get; set; }
-        public float y { get; set; }
-        public Dictionary<string, string> CustomProperties { get; set; } = new Dictionary<string, string>();
-    }
-
-    public class PrefabData
-    {
-        public string TextureName { get; set; } = string.Empty;
-        public string ScriptName { get; set; } = string.Empty;
-        public string Tag { get; set; } = ""Default"";
-        public Dictionary<string, string> CustomProperties { get; set; } = new Dictionary<string, string>();
-    }
-
-    public class GameEntity
-    {
-        public string PrefabName { get; set; } = string.Empty;
-        public Texture2D Texture { get; set; }
-        public Vector2 Position { get; set; }
-        public IEntityScript Script { get; set; }
-        public string Tag { get; set; } = ""Default"";
-        public bool IsDestroyed { get; set; } = false;
-        public Rectangle Bounds => Texture != null 
-            ? new Rectangle((int)Position.X, (int)Position.Y, Texture.Width, Texture.Height) 
-            : new Rectangle((int)Position.X, (int)Position.Y, 64, 64);
     }
 }
 ";

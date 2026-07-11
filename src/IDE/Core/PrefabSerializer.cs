@@ -1,17 +1,10 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE.Core
 {
-    public class PrefabData
-    {
-        public string TextureName { get; set; } = string.Empty;
-        public string ScriptName { get; set; } = string.Empty;
-        public string Tag { get; set; } = "Default";
-        public System.Collections.Generic.Dictionary<string, string> CustomProperties { get; set; } = new();
-    }
-
     public static class PrefabSerializer
     {
         public static PrefabData LoadPrefab(string filePath, Action<string> logCallback)
