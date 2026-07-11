@@ -1132,6 +1132,26 @@ namespace {projectName}.Scripts
 ";
         }
 
+        private static void SafeWriteAllText(string path, string content)
+        {
+            try
+            {
+                if (File.Exists(path))
+                {
+                    string existing = File.ReadAllText(path);
+                    if (existing == content)
+                    {
+                        return; // Content is identical, skip writing to avoid triggering FileSystemWatcher loop
+                    }
+                }
+                File.WriteAllText(path, content);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error writing file safely: {ex.Message}");
+            }
+        }
+
         public static void SyncRuntimeFiles(string targetDirectory)
         {
             try
@@ -1142,14 +1162,14 @@ namespace {projectName}.Scripts
                     Directory.CreateDirectory(runtimeDir);
                 }
 
-                File.WriteAllText(Path.Combine(runtimeDir, "EntityBehavior.cs"), GetEntityBehaviorCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "GameEntity.cs"), GetGameEntityCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "SharedTypes.cs"), GetSharedTypesCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "SceneLoader.cs"), GetSceneLoaderCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "EntityManager.cs"), GetEntityManagerCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "GameState.cs"), GetGameStateCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "SceneManager.cs"), GetSceneManagerCode());
-                File.WriteAllText(Path.Combine(runtimeDir, "Camera2D.cs"), GetCamera2DCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "EntityBehavior.cs"), GetEntityBehaviorCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "GameEntity.cs"), GetGameEntityCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "SharedTypes.cs"), GetSharedTypesCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "SceneLoader.cs"), GetSceneLoaderCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "EntityManager.cs"), GetEntityManagerCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "GameState.cs"), GetGameStateCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "SceneManager.cs"), GetSceneManagerCode());
+                SafeWriteAllText(Path.Combine(runtimeDir, "Camera2D.cs"), GetCamera2DCode());
             }
             catch (Exception ex)
             {
