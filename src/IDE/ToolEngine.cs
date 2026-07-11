@@ -107,6 +107,9 @@ namespace MonoGameMaker.IDE
 
             if (GlobalState.IsPlaying && !_wasPlaying)
             {
+                // Auto-save transient scenes to disk before compilation/simulation
+                ResourceEditors.SaveAllOpenScenes();
+
                 // Transition to play: compile and load DLL first
                 bool buildSuccess = AssemblyReloader.CompileAndLoad(GlobalState.CurrentProjectPath, GlobalState.Log);
                 if (!buildSuccess && AssemblyReloader.LoadedAssembly == null)

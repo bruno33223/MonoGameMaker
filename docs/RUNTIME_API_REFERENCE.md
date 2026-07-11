@@ -18,6 +18,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`ImGuiUI`** | Immediate-mode UI layout drawing and canvas isolation | **[ImGuiUI Manual](runtime/ImGuiUI.md)** |
 | **`ProjectMigrator`** | Idempotent automatic migration of legacy projects and scripts | **[ProjectMigrator Manual](runtime/ProjectMigrator.md)** |
 | **`SimulationStates`** | Control simulation loop (Play, Pause, Step) and focus-based input isolation | **[SimulationStates Manual](runtime/SimulationStates.md)** |
+| **`SaveSystem`** | JSON-based Save/Load persistence for GameState variables | **[SaveSystem Manual](runtime/SaveSystem.md)** |
 
 ---
 

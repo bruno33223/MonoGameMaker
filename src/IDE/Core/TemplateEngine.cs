@@ -969,6 +969,76 @@ namespace MonoGameMaker.Runtime
             }
             return defaultValue;
         }
+
+        public static void SaveToFile(string filename = ""save_state.json"")
+        {
+            try
+            {
+                var options = new System.Text.Json.JsonSerializerOptions { WriteIndented = true };
+                string json = System.Text.Json.JsonSerializer.Serialize(Data, options);
+                System.IO.File.WriteAllText(filename, json);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($""Error saving GameState to file: {ex.Message}"");
+            }
+        }
+
+        public static void LoadFromFile(string filename = ""save_state.json"")
+        {
+            try
+            {
+                if (System.IO.File.Exists(filename))
+                {
+                    string json = System.IO.File.ReadAllText(filename);
+                    var deserialized = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(json);
+                    if (deserialized != null)
+                    {
+                        Data = new Dictionary<string, object>();
+                        foreach (var kvp in deserialized)
+                        {
+                            if (kvp.Value is System.Text.Json.JsonElement element)
+                            {
+                                Data[kvp.Key] = ConvertJsonElement(element);
+                            }
+                            else
+                            {
+                                Data[kvp.Key] = kvp.Value;
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($""Error loading GameState from file: {ex.Message}"");
+            }
+        }
+
+        private static object ConvertJsonElement(System.Text.Json.JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case System.Text.Json.JsonValueKind.String:
+                    return element.GetString();
+                case System.Text.Json.JsonValueKind.Number:
+                    if (element.TryGetInt32(out int i))
+                        return i;
+                    if (element.TryGetInt64(out long l))
+                        return l;
+                    if (element.TryGetDouble(out double d))
+                        return d;
+                    return element.GetRawText();
+                case System.Text.Json.JsonValueKind.True:
+                    return true;
+                case System.Text.Json.JsonValueKind.False:
+                    return false;
+                case System.Text.Json.JsonValueKind.Null:
+                    return null;
+                default:
+                    return element.Clone();
+            }
+        }
     }
 }
 ";

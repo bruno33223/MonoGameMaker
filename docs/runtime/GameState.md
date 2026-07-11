@@ -15,6 +15,9 @@ namespace MonoGameMaker.Runtime
 
         public static void Set<T>(string key, T value);
         public static T Get<T>(string key, T defaultValue = default);
+        
+        public static void SaveToFile(string filename = "save_state.json");
+        public static void LoadFromFile(string filename = "save_state.json");
     }
 }
 ```

@@ -53,6 +53,19 @@ namespace MonoGameMaker.IDE.Windows
                 state.SelectedIndex = -1;
             }
         }
+
+        public static void SaveAllOpenScenes()
+        {
+            foreach (var kvp in _sceneStates)
+            {
+                string absolutePath = kvp.Key;
+                var state = kvp.Value;
+                if (state != null && state.Scene != null)
+                {
+                    SceneSerializer.SaveScenePath(absolutePath, state.Scene, GlobalState.Log);
+                }
+            }
+        }
         
         private static string _newScriptName = "Script1";
         private static string _newPrefabName = "NewObject1";
@@ -727,6 +740,20 @@ namespace MonoGameMaker.IDE.Windows
                 state.FallbackTexture.SetData(new[] { Microsoft.Xna.Framework.Color.Magenta });
 
                 _sceneStates[absolutePath] = state;
+            }
+
+            // Global Ctrl+S shortcut for saving the active scene tab
+            if (ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows))
+            {
+                var io = ImGui.GetIO();
+                if (io.KeyCtrl && ImGui.IsKeyPressed(ImGuiKey.S))
+                {
+                    bool success = SceneSerializer.SaveScenePath(absolutePath, state.Scene, GlobalState.Log);
+                    if (success)
+                    {
+                        GlobalState.Log($"[Shortcut] Saved scene configuration: {Path.GetFileName(absolutePath)}");
+                    }
+                }
             }
 
             ImGui.Text("Scene Layout & Visual Viewport Editor");

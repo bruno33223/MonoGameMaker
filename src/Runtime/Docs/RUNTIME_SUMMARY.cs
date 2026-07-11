@@ -198,6 +198,18 @@ namespace MonoGameMaker.Runtime
         /// Clear all persistent global data.
         /// </summary>
         public static void Clear() { }
+
+        /// <summary>
+        /// Saves the GameState dictionary data to a JSON file (by default "save_state.json") in the game root folder.
+        /// Call this when the player saves the game or transitions levels to persist progress.
+        /// </summary>
+        public static void SaveToFile(string filename = "save_state.json") { }
+
+        /// <summary>
+        /// Loads the GameState dictionary data from a JSON file (by default "save_state.json").
+        /// Call this at game launch or load checkpoints to restore player progress.
+        /// </summary>
+        public static void LoadFromFile(string filename = "save_state.json") { }
     }
 
     /// <summary>

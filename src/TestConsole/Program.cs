@@ -308,6 +308,85 @@ namespace TestGame.Scripts
                 }
             }
 
+            // 6. Test GameState JSON Persistence via reflection on the compiled assembly
+            Console.WriteLine("\n[TEST 6] Verifying GameState Save/Load and type restoration via reflection...");
+            try
+            {
+                string dllPath = Path.Combine(projectDir, "bin", "Debug", "net8.0", "TestGame.dll");
+                var assembly = System.Reflection.Assembly.LoadFrom(dllPath);
+                var gameStateType = assembly.GetType("MonoGameMaker.Runtime.GameState");
+                if (gameStateType == null)
+                {
+                    Console.WriteLine("TEST FAILED: GameState type not found in compiled assembly.");
+                    Environment.Exit(1);
+                }
+
+                var setMethod = gameStateType.GetMethod("Set");
+                var getMethod = gameStateType.GetMethod("Get");
+                var saveMethod = gameStateType.GetMethod("SaveToFile");
+                var loadMethod = gameStateType.GetMethod("LoadFromFile");
+
+                if (setMethod == null || getMethod == null || saveMethod == null || loadMethod == null)
+                {
+                    Console.WriteLine("TEST FAILED: GameState methods (Set/Get/SaveToFile/LoadFromFile) are missing.");
+                    Environment.Exit(1);
+                }
+
+                // Generic Get<T> method resolution
+                var getIntMethod = getMethod.MakeGenericMethod(typeof(int));
+                var getStringMethod = getMethod.MakeGenericMethod(typeof(string));
+                var getDoubleMethod = getMethod.MakeGenericMethod(typeof(double));
+                var getBoolMethod = getMethod.MakeGenericMethod(typeof(bool));
+
+                var setGenericInt = setMethod.MakeGenericMethod(typeof(int));
+                var setGenericString = setMethod.MakeGenericMethod(typeof(string));
+                var setGenericDouble = setMethod.MakeGenericMethod(typeof(double));
+                var setGenericBool = setMethod.MakeGenericMethod(typeof(bool));
+
+                // Set values
+                setGenericInt.Invoke(null, new object[] { "Coins", 50 });
+                setGenericString.Invoke(null, new object[] { "PlayerName", "Antigravity" });
+                setGenericDouble.Invoke(null, new object[] { "HealthPercent", 0.75 });
+                setGenericBool.Invoke(null, new object[] { "IsGameOver", false });
+
+                // Save to file
+                string testSaveFile = Path.Combine(testDir, "test_save_state.json");
+                saveMethod.Invoke(null, new object[] { testSaveFile });
+                Console.WriteLine($"Saved test state to: {testSaveFile}");
+
+                if (!File.Exists(testSaveFile))
+                {
+                    Console.WriteLine("TEST FAILED: save file was not created on disk.");
+                    Environment.Exit(1);
+                }
+
+                // Clear / Reset GameState for loading verification
+                var clearMethod = gameStateType.GetMethod("Clear");
+                clearMethod?.Invoke(null, null);
+
+                // Load from file
+                loadMethod.Invoke(null, new object[] { testSaveFile });
+
+                // Retrieve and verify values
+                int loadedCoins = (int)getIntMethod.Invoke(null, new object[] { "Coins", 0 });
+                string loadedPlayerName = (string)getStringMethod.Invoke(null, new object[] { "PlayerName", "Default" });
+                double loadedHealth = (double)getDoubleMethod.Invoke(null, new object[] { "HealthPercent", 0.0 });
+                bool loadedIsGameOver = (bool)getBoolMethod.Invoke(null, new object[] { "IsGameOver", true });
+
+                if (loadedCoins != 50 || loadedPlayerName != "Antigravity" || loadedHealth != 0.75 || loadedIsGameOver != false)
+                {
+                    Console.WriteLine($"TEST FAILED: Deserialization value mismatch! Coins: {loadedCoins}, Name: {loadedPlayerName}, Health: {loadedHealth}, GameOver: {loadedIsGameOver}");
+                    Environment.Exit(1);
+                }
+
+                Console.WriteLine("TEST PASSED: GameState successfully persisted and restored all primitive types!");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"TEST FAILED: Error during GameState persistence reflection test: {ex.Message}\n{ex.StackTrace}");
+                Environment.Exit(1);
+            }
+
             Console.WriteLine("\n=== ALL INTEGRATION TESTS PASSED SUCCESSFULLY! ===");
         }
     }
