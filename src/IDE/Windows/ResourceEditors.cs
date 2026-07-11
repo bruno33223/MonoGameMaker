@@ -367,6 +367,42 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             DrawBackgroundImageComboBox(availableTextures, ref currentTex, absolutePath);
             prefab.TextureName = currentTex;
 
+            // Hitbox Mask configuration
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+            ImGui.TextColored(new System.Numerics.Vector4(0.8f, 0.8f, 0f, 1f), "Hitbox Mask (Custom Bounds):");
+            
+            float offset_x = prefab.HitboxOffsetX;
+            float offset_y = prefab.HitboxOffsetY;
+            float size_w = prefab.HitboxWidth;
+            float size_h = prefab.HitboxHeight;
+
+            ImGui.Text("Offset X / Y:");
+            ImGui.SetNextItemWidth(100);
+            if (ImGui.DragFloat($"##HitboxOffsetX_{absolutePath}", ref offset_x, 1.0f, -1000f, 1000f))
+            {
+                prefab.HitboxOffsetX = offset_x;
+            }
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(100);
+            if (ImGui.DragFloat($"##HitboxOffsetY_{absolutePath}", ref offset_y, 1.0f, -1000f, 1000f))
+            {
+                prefab.HitboxOffsetY = offset_y;
+            }
+
+            ImGui.Text("Width / Height (0 = texture size):");
+            ImGui.SetNextItemWidth(100);
+            if (ImGui.DragFloat($"##HitboxWidth_{absolutePath}", ref size_w, 1.0f, 0f, 4000f))
+            {
+                prefab.HitboxWidth = size_w;
+            }
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(100);
+            if (ImGui.DragFloat($"##HitboxHeight_{absolutePath}", ref size_h, 1.0f, 0f, 4000f))
+            {
+                prefab.HitboxHeight = size_h;
+            }
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
             // Script Name Input
             string currentScript = prefab.ScriptName;
             ImGui.Text("Script Class Name:");
@@ -1126,6 +1162,35 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                                 GlobalState.Log($"Error executing simulation Draw: {ex.Message}");
                             }
                         }
+
+                        // Draw live simulation green hitbox debugging outlines
+                        var entitiesField = entityManagerType.GetField("Entities", BindingFlags.Public | BindingFlags.Static);
+                        if (entitiesField != null)
+                        {
+                            var list = (System.Collections.IList?)entitiesField.GetValue(null);
+                            if (list != null && GlobalState.PixelTexture != null)
+                            {
+                                int thick = 1;
+                                Color hitboxCol = Color.Green * 0.5f;
+                                foreach (var entity in list)
+                                {
+                                    if (entity == null) continue;
+                                    var boundsProp = entity.GetType().GetProperty("Bounds");
+                                    if (boundsProp != null)
+                                    {
+                                        Rectangle bounds = (Rectangle)boundsProp.GetValue(entity);
+                                        // Top
+                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y, bounds.Width, thick), hitboxCol);
+                                        // Bottom
+                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y + bounds.Height - thick, bounds.Width, thick), hitboxCol);
+                                        // Left
+                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y, thick, bounds.Height), hitboxCol);
+                                        // Right
+                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X + bounds.Width - thick, bounds.Y, thick, bounds.Height), hitboxCol);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 else
@@ -1156,6 +1221,27 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         else
                         {
                             state.SpriteBatch.Draw(state.FallbackTexture!, new Rectangle((int)inst.x, (int)inst.y, (int)drawW, (int)drawH), Color.White);
+                        }
+
+                        // Draw hitbox debugging outline (semi-transparent green)
+                        if (GlobalState.PixelTexture != null)
+                        {
+                            float hitboxX = inst.x + pData.HitboxOffsetX;
+                            float hitboxY = inst.y + pData.HitboxOffsetY;
+                            float hitboxW = pData.HitboxWidth > 0f ? pData.HitboxWidth : drawW;
+                            float hitboxH = pData.HitboxHeight > 0f ? pData.HitboxHeight : drawH;
+
+                            int thick = 1;
+                            Color hitboxCol = Color.Green * 0.5f;
+
+                            // Top border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)hitboxX, (int)hitboxY, (int)hitboxW, thick), hitboxCol);
+                            // Bottom border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)hitboxX, (int)hitboxY + (int)hitboxH - thick, (int)hitboxW, thick), hitboxCol);
+                            // Left border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)hitboxX, (int)hitboxY, thick, (int)hitboxH), hitboxCol);
+                            // Right border
+                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)hitboxX + (int)hitboxW - thick, (int)hitboxY, thick, (int)hitboxH), hitboxCol);
                         }
 
                         // 4. Draw selection Bounding Box visual highlight (yellow)

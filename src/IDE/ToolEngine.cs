@@ -232,6 +232,8 @@ namespace MonoGameMaker.IDE
                                         gameEntityType.GetProperty("Position")?.SetValue(gameEntity, new Vector2(inst.x, inst.y));
                                         gameEntityType.GetProperty("Script")?.SetValue(gameEntity, scriptInstance);
                                         gameEntityType.GetProperty("Tag")?.SetValue(gameEntity, prefabData.Tag ?? "Default");
+                                        gameEntityType.GetProperty("HitboxOffset")?.SetValue(gameEntity, new Vector2(prefabData.HitboxOffsetX, prefabData.HitboxOffsetY));
+                                        gameEntityType.GetProperty("HitboxSize")?.SetValue(gameEntity, new Vector2(prefabData.HitboxWidth, prefabData.HitboxHeight));
                                     }
 
                                     // Initialize script

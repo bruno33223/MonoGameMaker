@@ -8,6 +8,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | :--- | :--- | :--- |
 | **`EntityBehavior`** | Script lifecycle events (`Awake`, `Update`, `Draw`, `DrawUI`, `OnCollision`) | **[EntityBehavior Manual](runtime/EntityBehavior.md)** |
 | **`GameEntity`** | Entity properties (`Position`, `Texture`, `Tag`, `Bounds`, `Script`, `PlayAnimation`) | **[GameEntity Manual](runtime/GameEntity.md)** |
+| **`CollisionMasks`** | Custom hitboxes, offsets, scaling boundaries, and fallbacks | **[CollisionMasks Manual](runtime/CollisionMasks.md)** |
 | **`Animations`** | Uniform grid-based spritesheet animators (`SourceRect` updates, `PlayAnimation`) | **[Animations Manual](runtime/Animations.md)** |
 | **`EntityManager`** | Life cycles (`Spawn`, `Destroy`) and pairwise collision trigger loop | **[EntityManager Manual](runtime/EntityManager.md)** |
 | **`GameState`** | Global persistent storage (`Set`, `Get`) and type conversion fallbacks | **[GameState Manual](runtime/GameState.md)** |

@@ -27,6 +27,8 @@ namespace MonoGameMaker.Runtime
         public bool IsDestroyed { get; set; } = false;
         
         public Rectangle? SourceRect { get; set; } = null;
+        public Vector2 HitboxOffset { get; set; } = Vector2.Zero;
+        public Vector2 HitboxSize { get; set; } = Vector2.Zero;
 
         private int _animFrameWidth;
         private int _animFrameHeight;
@@ -37,11 +39,15 @@ namespace MonoGameMaker.Runtime
         private int _animCurrentFrame;
         private bool _isAnimating;
 
-        public Rectangle Bounds => SourceRect.HasValue
-            ? new Rectangle((int)Position.X, (int)Position.Y, SourceRect.Value.Width, SourceRect.Value.Height)
-            : (Texture != null 
-                ? new Rectangle((int)Position.X, (int)Position.Y, Texture.Width, Texture.Height) 
-                : new Rectangle((int)Position.X, (int)Position.Y, 64, 64));
+        public Rectangle Bounds
+        {
+            get
+            {
+                int w = HitboxSize.X > 0f ? (int)HitboxSize.X : (SourceRect.HasValue ? SourceRect.Value.Width : (Texture != null ? Texture.Width : 64));
+                int h = HitboxSize.Y > 0f ? (int)HitboxSize.Y : (SourceRect.HasValue ? SourceRect.Value.Height : (Texture != null ? Texture.Height : 64));
+                return new Rectangle((int)(Position.X + HitboxOffset.X), (int)(Position.Y + HitboxOffset.Y), w, h);
+            }
+        }
 
         public void PlayAnimation(int frameWidth, int frameHeight, int startFrame, int endFrame, float fps)
         {
@@ -141,6 +147,10 @@ namespace MonoGameMaker.Runtime
         public string TextureName { get; set; } = string.Empty;
         public string ScriptName { get; set; } = string.Empty;
         public string Tag { get; set; } = "Default";
+        public float HitboxOffsetX { get; set; } = 0f;
+        public float HitboxOffsetY { get; set; } = 0f;
+        public float HitboxWidth { get; set; } = 0f;
+        public float HitboxHeight { get; set; } = 0f;
         public Dictionary<string, string> CustomProperties { get; set; } = new Dictionary<string, string>();
     }
 }

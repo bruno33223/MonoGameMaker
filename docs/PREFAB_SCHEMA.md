@@ -15,6 +15,10 @@ Prefabs are stored as JSON files inside the `Prefabs/` directory. They define th
   "TextureName": "player_sprite",
   "ScriptName": "MyGame.Scripts.PlayerController",
   "Tag": "Player",
+  "HitboxOffsetX": 8.0,
+  "HitboxOffsetY": 16.0,
+  "HitboxWidth": 16.0,
+  "HitboxHeight": 32.0,
   "CustomProperties": {
     "Speed": "350",
     "JumpForce": "700"
@@ -25,9 +29,13 @@ Prefabs are stored as JSON files inside the `Prefabs/` directory. They define th
 ### Property Descriptions
 
 *   **`TextureName`** (string): The asset name of the sprite texture file located in `Content/Textures/` (without path prefix or extension, e.g., `"player_sprite"` for `Content/Textures/player_sprite.png`).
-*   **`ScriptName`** (string): The fully-qualified namespace class name of the C# script behavior that implements `IEntityScript` to run on this entity (e.g. `"MyGame.Scripts.PlayerController"`). Leave empty if the object has no behavior.
+*   **`ScriptName`** (string): The fully-qualified namespace class name of the C# script behavior that implements `EntityBehavior` to run on this entity (e.g. `"MyGame.Scripts.PlayerController"`). Leave empty if the object has no behavior.
 *   **`Tag`** (string): Group/classification identifier used primarily for query lookups and collision detection filtering (e.g. `"Player"`, `"Enemy"`, `"Solid"`). Defaults to `"Default"`.
-*   **`CustomProperties`** (key-value dictionary of string-to-string): Default parameter parameters passed into the script's `Initialize` method upon spawning.
+*   **`HitboxOffsetX`** (float): Horizontal displacement offset of the collision box relative to the entity's position coordinate.
+*   **`HitboxOffsetY`** (float): Vertical displacement offset of the collision box relative to the entity's position coordinate.
+*   **`HitboxWidth`** (float): Custom width dimension of the AABB collision box. Set to `0` to default to texture/animation frame width.
+*   **`HitboxHeight`** (float): Custom height dimension of the AABB collision box. Set to `0` to default to texture/animation frame height.
+*   **`CustomProperties`** (key-value dictionary of string-to-string): Default parameter parameters passed into the script's `Initialize`/`Awake` method upon spawning.
 
 ---
 
