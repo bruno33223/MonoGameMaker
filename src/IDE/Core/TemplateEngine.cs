@@ -1343,6 +1343,7 @@ namespace MonoGameMaker.Runtime
         private static SpriteBatch _spriteBatch;
         private static SpriteFont _spriteFont;
         private static Texture2D _pixel;
+        private static System.Collections.Generic.Dictionary<string, SpriteFont> _loadedFonts = new System.Collections.Generic.Dictionary<string, SpriteFont>(System.StringComparer.OrdinalIgnoreCase);
 
         public static void Initialize(ContentManager content, SpriteBatch spriteBatch, Texture2D fallbackPixel)
         {
@@ -1354,6 +1355,7 @@ namespace MonoGameMaker.Runtime
             {
                 // Tries to load default spritefont from Fonts directory
                 _spriteFont = _content.Load<SpriteFont>(""Fonts/default"");
+                if (_spriteFont != null) _loadedFonts[""default""] = _spriteFont;
             }
             catch
             {
@@ -1361,6 +1363,7 @@ namespace MonoGameMaker.Runtime
                 {
                     // Fallback to root Content directory
                     _spriteFont = _content.Load<SpriteFont>(""default"");
+                    if (_spriteFont != null) _loadedFonts[""default""] = _spriteFont;
                 }
                 catch
                 {
@@ -1368,15 +1371,61 @@ namespace MonoGameMaker.Runtime
                     _spriteFont = null;
                 }
             }
+
+            try
+            {
+                string fontsDir = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, _content.RootDirectory, ""Fonts"");
+                if (System.IO.Directory.Exists(fontsDir))
+                {
+                    foreach (var file in System.IO.Directory.GetFiles(fontsDir, ""*.xnb""))
+                    {
+                        string fontName = System.IO.Path.GetFileNameWithoutExtension(file);
+                        if (fontName.Equals(""default"", System.StringComparison.OrdinalIgnoreCase))
+                            continue;
+
+                        try
+                        {
+                            var font = _content.Load<SpriteFont>(""Fonts/"" + fontName);
+                            if (font != null)
+                            {
+                                _loadedFonts[fontName] = font;
+                            }
+                        }
+                        catch (System.Exception ex)
+                        {
+                            System.Console.WriteLine($""Failed to load font '{fontName}': {ex.Message}"");
+                        }
+                    }
+                }
+            }
+            catch (System.Exception ex)
+            {
+                System.Console.WriteLine($""Error scanning custom fonts directory: {ex.Message}"");
+            }
         }
 
         public static void Draw(string text, Vector2 position, Color color)
         {
+            Draw(text, position, color, ""default"");
+        }
+
+        public static void Draw(string text, Vector2 position, Color color, string fontName = ""default"")
+        {
             if (_spriteBatch == null) return;
 
-            if (_spriteFont != null)
+            SpriteFont fontToUse = null;
+            if (!string.IsNullOrEmpty(fontName) && _loadedFonts.TryGetValue(fontName, out var foundFont))
             {
-                _spriteBatch.DrawString(_spriteFont, text, position, color);
+                fontToUse = foundFont;
+            }
+            else
+            {
+                fontToUse = _spriteFont;
+            }
+
+            if (fontToUse != null)
+            {
+                _spriteBatch.DrawString(fontToUse, text, position, color);
             }
             else
             {

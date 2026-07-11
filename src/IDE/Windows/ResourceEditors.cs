@@ -72,6 +72,32 @@ namespace MonoGameMaker.IDE.Windows
         private static string _newPropKey = "";
         private static string _newPropValue = "";
 
+        private static string _editingFontPath = "";
+        private static string _editingFontName = "Arial";
+        private static int _editingFontSize = 14;
+        private static float _editingFontSpacing = 0f;
+        private static string _editingFontStyle = "Regular";
+
+        private static readonly string[] _commonFonts = new[]
+        {
+            "Arial",
+            "Courier New",
+            "Consolas",
+            "Georgia",
+            "Impact",
+            "Segoe UI",
+            "Times New Roman",
+            "Trebuchet MS",
+            "Verdana"
+        };
+
+        private static readonly string[] _fontStyles = new[]
+        {
+            "Regular",
+            "Bold",
+            "Italic"
+        };
+
         public static void DrawPropertiesWindow()
         {
             ImGui.Begin("Properties");
@@ -111,6 +137,10 @@ namespace MonoGameMaker.IDE.Windows
                 if (res.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
                 {
                     DrawPrefabProperties(res, absolutePath);
+                }
+                else if (res.EndsWith(".spritefont", StringComparison.OrdinalIgnoreCase))
+                {
+                    DrawFontProperties(res, absolutePath);
                 }
                 else
                 {
@@ -454,6 +484,152 @@ namespace MonoGameMaker.IDE.Windows
                     GlobalState.Log($"Error deleting prefab: {ex.Message}");
                 }
             }
+        }
+
+        private static void DrawFontProperties(string relativePath, string absolutePath)
+        {
+            string fileName = Path.GetFileName(relativePath);
+            ImGui.TextColored(new System.Numerics.Vector4(0.2f, 0.8f, 0.4f, 1f), $"SpriteFont Editor: {fileName}");
+            ImGui.Text($"Relative Path: {relativePath}");
+            ImGui.Separator();
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
+            if (_editingFontPath != absolutePath)
+            {
+                try
+                {
+                    _editingFontPath = absolutePath;
+                    if (File.Exists(absolutePath))
+                    {
+                        var doc = new System.Xml.XmlDocument();
+                        doc.Load(absolutePath);
+                        _editingFontName = doc.SelectSingleNode("//FontName")?.InnerText ?? "Arial";
+                        
+                        string sizeStr = doc.SelectSingleNode("//Size")?.InnerText ?? "14";
+                        int.TryParse(sizeStr, out _editingFontSize);
+                        
+                        string spacingStr = doc.SelectSingleNode("//Spacing")?.InnerText ?? "0";
+                        float.TryParse(spacingStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _editingFontSpacing);
+                        
+                        _editingFontStyle = doc.SelectSingleNode("//Style")?.InnerText ?? "Regular";
+                    }
+                }
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Error loading spritefont description: {ex.Message}");
+                }
+            }
+
+            // Render selector controls
+            ImGui.Text("Font Family (System Name):");
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X - 120);
+            ImGui.InputText("##FontNameText", ref _editingFontName, 64);
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(110);
+            if (ImGui.BeginCombo("##FontNameCombo", _editingFontName))
+            {
+                foreach (var font in _commonFonts)
+                {
+                    bool isSelected = (_editingFontName == font);
+                    if (ImGui.Selectable(font, isSelected))
+                    {
+                        _editingFontName = font;
+                    }
+                    if (isSelected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+                ImGui.EndCombo();
+            }
+
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
+            ImGui.DragInt("Size", ref _editingFontSize, 1f, 4, 120);
+            ImGui.DragFloat("Spacing", ref _editingFontSpacing, 0.1f, 0f, 20f);
+
+            ImGui.Text("Style:");
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+            if (ImGui.BeginCombo("##FontStyleCombo", _editingFontStyle))
+            {
+                foreach (var style in _fontStyles)
+                {
+                    bool isSelected = (_editingFontStyle == style);
+                    if (ImGui.Selectable(style, isSelected))
+                    {
+                        _editingFontStyle = style;
+                    }
+                    if (isSelected)
+                    {
+                        ImGui.SetItemDefaultFocus();
+                    }
+                }
+                ImGui.EndCombo();
+            }
+
+            ImGui.Dummy(new System.Numerics.Vector2(0, 10));
+
+            // Save and Compile Font Button
+            if (ImGui.Button("Save and Compile Font", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+            {
+                try
+                {
+                    var doc = new System.Xml.XmlDocument();
+                    doc.Load(absolutePath);
+                    
+                    var fontNameNode = doc.SelectSingleNode("//FontName");
+                    if (fontNameNode != null) fontNameNode.InnerText = _editingFontName;
+                    
+                    var sizeNode = doc.SelectSingleNode("//Size");
+                    if (sizeNode != null) sizeNode.InnerText = _editingFontSize.ToString();
+                    
+                    var spacingNode = doc.SelectSingleNode("//Spacing");
+                    if (spacingNode != null) spacingNode.InnerText = _editingFontSpacing.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    
+                    var styleNode = doc.SelectSingleNode("//Style");
+                    if (styleNode != null) styleNode.InnerText = _editingFontStyle;
+
+                    doc.Save(absolutePath);
+                    GlobalState.Log($"Saved spritefont properties to: {Path.GetFileName(absolutePath)}");
+
+                    // Trigger MGCB compilation via RegisterAsset
+                    string projPath = GlobalState.CurrentProjectPath!;
+                    _ = Task.Run(async () =>
+                    {
+                        bool success = await AssetPipelineSynchronizer.RegisterAsset(projPath, absolutePath, "Fonts", GlobalState.Log);
+                        if (success)
+                        {
+                            GlobalState.Log($"Successfully compiled spritefont: {Path.GetFileNameWithoutExtension(absolutePath)}");
+                        }
+                    });
+                }
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Error saving and compiling font: {ex.Message}");
+                }
+            }
+
+            ImGui.Dummy(new System.Numerics.Vector2(0, 10));
+            ImGui.Text("WYSIWYG Preview:");
+            ImGui.BeginChild("FontPreviewCanvas", new System.Numerics.Vector2(0, 130), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar);
+            
+            string previewText = "ABCDEFGHIJKLM\nabcdefghijklm\n0123456789";
+            System.Numerics.Vector4 textColor = new System.Numerics.Vector4(1f, 1f, 1f, 1f);
+            if (_editingFontStyle == "Bold")
+            {
+                textColor = new System.Numerics.Vector4(1f, 1f, 0.4f, 1f);
+            }
+            else if (_editingFontStyle == "Italic")
+            {
+                textColor = new System.Numerics.Vector4(0.4f, 1f, 1f, 1f);
+            }
+
+            ImGui.TextColored(textColor, $"Font: {_editingFontName}, Size: {_editingFontSize}px, Style: {_editingFontStyle}");
+            ImGui.Separator();
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+            ImGui.TextColored(textColor, previewText);
+            
+            ImGui.EndChild();
         }
 
         private static void DrawFileProperties(string relativePath, string absolutePath)

@@ -125,7 +125,7 @@ namespace MonoGameMaker.IDE.Windows
                 }
 
                 string ext = Path.GetExtension(relativePath).ToLower();
-                bool isEditable = ext == ".cs" || ext == ".json";
+                bool isEditable = ext == ".cs" || ext == ".json" || ext == ".spritefont";
                 if (isEditable && ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left))
                 {
                     GlobalState.OpenResources.Add(relativePath);
@@ -157,15 +157,17 @@ namespace MonoGameMaker.IDE.Windows
                         _showCreationPopup = true;
                     }
 
-                    // Determine context-specific folders
                     bool isScriptsFolder = relativePath.Equals("Scripts", StringComparison.OrdinalIgnoreCase) || 
                                            relativePath.StartsWith("Scripts/", StringComparison.OrdinalIgnoreCase);
                                            
                     bool isPrefabsFolder = relativePath.Equals("Prefabs", StringComparison.OrdinalIgnoreCase) || 
                                            relativePath.StartsWith("Prefabs/", StringComparison.OrdinalIgnoreCase);
-                                           
+
                     bool isScenesFolder = relativePath.Equals("Content/Scenes", StringComparison.OrdinalIgnoreCase) || 
                                           relativePath.StartsWith("Content/Scenes/", StringComparison.OrdinalIgnoreCase);
+
+                    bool isFontsFolder = relativePath.Equals("Content/Fonts", StringComparison.OrdinalIgnoreCase) || 
+                                         relativePath.StartsWith("Content/Fonts/", StringComparison.OrdinalIgnoreCase);
 
                     if (isScriptsFolder)
                     {
@@ -200,6 +202,17 @@ namespace MonoGameMaker.IDE.Windows
                             _creationTargetFolder = node.FullPath;
                             _creationType = "Scene";
                             _inputName = "level_1";
+                            _showCreationPopup = true;
+                        }
+                    }
+
+                    if (isFontsFolder)
+                    {
+                        if (ImGui.MenuItem("Create New SpriteFont"))
+                        {
+                            _creationTargetFolder = node.FullPath;
+                            _creationType = "Font";
+                            _inputName = "NewFont";
                             _showCreationPopup = true;
                         }
                     }
@@ -354,6 +367,34 @@ namespace MonoGameMaker.IDE.Windows
                             string sceneJson = "{\n  \"Width\": 1280,\n  \"Height\": 720,\n  \"BackgroundColor\": {\n    \"X\": 0.1,\n    \"Y\": 0.1,\n    \"Z\": 0.2\n  },\n  \"BackgroundImage\": \"\",\n  \"Instances\": []\n}";
                             File.WriteAllText(destPath, sceneJson);
                             GlobalState.Log($"Created scene layout: {name}");
+                        }
+                        break;
+
+                    case "Font":
+                        if (!name.EndsWith(".spritefont", StringComparison.OrdinalIgnoreCase))
+                        {
+                            name += ".spritefont";
+                            destPath = Path.Combine(_creationTargetFolder, name);
+                        }
+                        if (File.Exists(destPath))
+                        {
+                            GlobalState.Log($"Error: Font file '{name}' already exists.");
+                        }
+                        else
+                        {
+                            string fontXml = TemplateEngine.GetDefaultSpriteFontCode();
+                            File.WriteAllText(destPath, fontXml);
+                            GlobalState.Log($"Created spritefont file: {name}");
+                            
+                            // Trigger background compilation and registration
+                            _ = Task.Run(async () =>
+                            {
+                                bool success = await AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath!, destPath, "Fonts", GlobalState.Log);
+                                if (success)
+                                {
+                                    GlobalState.Log($"Successfully compiled spritefont: {Path.GetFileNameWithoutExtension(destPath)}");
+                                }
+                            });
                         }
                         break;
                 }

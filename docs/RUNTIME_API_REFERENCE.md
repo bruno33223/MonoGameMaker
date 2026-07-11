@@ -20,6 +20,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`SimulationStates`** | Control simulation loop (Play, Pause, Step) and focus-based input isolation | **[SimulationStates Manual](runtime/SimulationStates.md)** |
 | **`SaveSystem`** | JSON-based Save/Load persistence for GameState variables | **[SaveSystem Manual](runtime/SaveSystem.md)** |
 | **`FileManagement`** | Active hub context creations and background deletion pipeline | **[FileManagement Manual](runtime/FileManagement.md)** |
+| **`CustomFonts`** | Procedures for creating, editing, compiling, and drawing custom fonts | **[CustomFonts Manual](runtime/CustomFonts.md)** |
 
 ---
 

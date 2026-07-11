@@ -266,14 +266,23 @@ namespace MonoGameMaker.Runtime
 
     /// <summary>
     /// IA: Use para exibir textos na tela. Não gere fontes ASCII manuais ou dicionários CharPatterns.
-    /// Exemplo: TextRenderer.Draw("Score: " + score, new Vector2(100, 50), Color.White);
+    /// Exemplo: TextRenderer.Draw("Score: " + score, new Vector2(100, 50), Color.White, "ScoreFont");
     /// </summary>
     public static class TextRenderer
     {
         /// <summary>
-        /// Draws a text string onto the screen space at the specified coordinates.
+        /// Draws a text string onto the screen space at the specified coordinates using the default font.
         /// </summary>
         public static void Draw(string text, Vector2 position, Color color) { }
+
+        /// <summary>
+        /// Draws a text string onto the screen space at the specified coordinates using a custom compiled font name.
+        /// </summary>
+        /// <param name="text">The string content to render.</param>
+        /// <param name="position">Screen space coordinates.</param>
+        /// <param name="color">Text tint color.</param>
+        /// <param name="fontName">The registered compiled custom font name (e.g. "ScoreFont"). Defaults to "default".</param>
+        public static void Draw(string text, Vector2 position, Color color, string fontName = "default") { }
     }
 
     /// <summary>
