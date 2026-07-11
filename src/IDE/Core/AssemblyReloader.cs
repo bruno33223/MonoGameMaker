@@ -37,6 +37,29 @@ namespace MonoGameMaker.IDE.Core
 
                 logCallback($"Building project {projectName} in background...");
 
+                // Terminate any active standalone game processes to prevent file locks
+                try
+                {
+                    var runningProcesses = Process.GetProcessesByName(projectName);
+                    foreach (var p in runningProcesses)
+                    {
+                        try
+                        {
+                            p.Kill();
+                            p.WaitForExit(2000);
+                            logCallback($"Stopped running instance of {projectName} (PID {p.Id}) to release executable file locks.");
+                        }
+                        catch (Exception ex)
+                        {
+                            logCallback($"Warning: Could not terminate process {projectName} (PID {p.Id}): {ex.Message}");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logCallback($"Warning: Error scanning for running {projectName} processes: {ex.Message}");
+                }
+
                 // Sync core runtime templates automatically to apply engine bugfixes without recreation
                 TemplateEngine.SyncRuntimeFiles(projectRoot);
 
