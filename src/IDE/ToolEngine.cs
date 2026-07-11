@@ -834,7 +834,7 @@ namespace MonoGameMaker.IDE
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                WorkingDirectory = workingDir ?? GlobalState.CurrentProjectPath
+                WorkingDirectory = Path.Combine(GlobalState.CurrentProjectPath, "bin", "Debug", "net8.0")
             };
             TemplateEngine.ConfigureDotnetPath(runPsi);
 
