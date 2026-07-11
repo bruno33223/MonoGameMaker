@@ -140,6 +140,12 @@ namespace MonoGameMaker.IDE.Core
                 string entityManagerPath = Path.Combine(runtimeDir, "EntityManager.cs");
                 File.WriteAllText(entityManagerPath, GetEntityManagerCode());
 
+                string gameStatePath = Path.Combine(runtimeDir, "GameState.cs");
+                File.WriteAllText(gameStatePath, GetGameStateCode());
+
+                string sceneManagerPath = Path.Combine(runtimeDir, "SceneManager.cs");
+                File.WriteAllText(sceneManagerPath, GetSceneManagerCode());
+
                 // 7. Inject Game1.cs
                 logCallback("Injecting customized Game1 boilerplate...");
                 string game1Path = Path.Combine(targetDirectory, "Game1.cs");
@@ -452,6 +458,12 @@ namespace MonoGameMaker.Runtime
         
         public static ContentManager Content { get; set; }
 
+        public static void Clear()
+        {
+            Entities.Clear();
+            _entitiesToAdd.Clear();
+        }
+
         public static GameEntity Spawn(string prefabName, Vector2 position)
         {
             if (prefabName.EndsWith("".prefab"", StringComparison.OrdinalIgnoreCase))
@@ -642,6 +654,106 @@ namespace MonoGameMaker.Runtime
 ";
         }
 
+        private static string GetGameStateCode()
+        {
+            return @"using System;
+using System.Collections.Generic;
+
+namespace MonoGameMaker.Runtime
+{
+    public static class GameState
+    {
+        public static Dictionary<string, object> Data = new Dictionary<string, object>();
+
+        public static void Set<T>(string key, T value)
+        {
+            if (value == null)
+            {
+                Data.Remove(key);
+            }
+            else
+            {
+                Data[key] = value;
+            }
+        }
+
+        public static T Get<T>(string key, T defaultValue = default)
+        {
+            if (Data.TryGetValue(key, out var val))
+            {
+                try
+                {
+                    return (T)Convert.ChangeType(val, typeof(T));
+                }
+                catch
+                {
+                    if (val is T typedVal)
+                    {
+                        return typedVal;
+                    }
+                }
+            }
+            return defaultValue;
+        }
+    }
+}
+";
+        }
+
+        private static string GetSceneManagerCode()
+        {
+            return @"using System;
+using System.IO;
+using Microsoft.Xna.Framework.Content;
+
+namespace MonoGameMaker.Runtime
+{
+    public static class SceneManager
+    {
+        private static ContentManager _content;
+        public static string CurrentSceneName { get; private set; } = string.Empty;
+
+        public static void Initialize(ContentManager content)
+        {
+            _content = content;
+            EntityManager.Content = content;
+        }
+
+        public static void LoadScene(string sceneName)
+        {
+            if (_content == null)
+            {
+                Console.WriteLine(""SceneManager error: Initialize with ContentManager before loading scenes."");
+                return;
+            }
+
+            CurrentSceneName = sceneName;
+
+            // Clear current entities
+            EntityManager.Clear();
+
+            // Handle scene name format
+            string cleanSceneName = sceneName;
+            if (cleanSceneName.EndsWith("".json"", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanSceneName = cleanSceneName.Substring(0, cleanSceneName.Length - 5);
+            }
+            if (cleanSceneName.StartsWith(""Scenes/"", StringComparison.OrdinalIgnoreCase))
+            {
+                cleanSceneName = cleanSceneName.Substring(7);
+            }
+
+            string jsonPath = Path.Combine(""Scenes"", $""{cleanSceneName}.json"");
+
+            // Load scene entities and assign to EntityManager
+            var entities = SceneLoader.LoadScene(jsonPath, _content);
+            EntityManager.Entities = entities;
+        }
+    }
+}
+";
+        }
+
         private static string GetGame1Code(string projectName)
         {
             return $@"using Microsoft.Xna.Framework;
@@ -680,10 +792,8 @@ namespace {projectName}
             _defaultTexture = new Texture2D(GraphicsDevice, 1, 1);
             _defaultTexture.SetData(new[] {{ Color.Magenta }});
 
-            EntityManager.Content = Content;
-
-            string jsonPath = Path.Combine(""Scenes"", ""scene_init.json"");
-            EntityManager.Entities = SceneLoader.LoadScene(jsonPath, Content);
+            SceneManager.Initialize(Content);
+            SceneManager.LoadScene(""scene_init"");
         }}
 
         protected override void Update(GameTime gameTime)
@@ -734,6 +844,8 @@ You must adhere to the following architecture rules and constraints at all times
 2. **NO Raw Texture Instancing**: Never instance a raw texture directly in `scene_init.json`. You MUST create a `.prefab` file inside the `Prefabs` directory that references the texture, and instance that prefab instead.
 3. **MGCB Asset Registry**: To add or use any texture or audio asset, place it in the appropriate folder and make sure it is registered in `Content/Content.mgcb` so the MonoGame Content Builder compiler can compile it.
 4. **Behavior Script Injection**: All gameplay behaviors must be implemented as scripts inheriting from `MonoGameMaker.Runtime.IEntityScript` inside the `Scripts/` folder, and then bound to an entity by entering the script class name in its `.prefab` file.
+5. **Scene Transitions**: To dynamically change scenes (e.g. go from a Menu to a Level), call `MonoGameMaker.Runtime.SceneManager.LoadScene(""scene_name"")` (without directory prefix or .json extension).
+6. **Global State Persistence**: Use `MonoGameMaker.Runtime.GameState.Data[""VariableName""]` or helper methods `GameState.Set(""key"", value)` / `GameState.Get<T>(""key"")` to store values like Score, Health, or Lives that must survive scene transitions.
 ";
         }
     }
