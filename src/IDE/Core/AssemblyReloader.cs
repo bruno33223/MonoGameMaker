@@ -21,6 +21,8 @@ namespace MonoGameMaker.IDE.Core
                 return false;
             }
 
+            ProjectMigrator.Shift(projectRoot, logCallback);
+
             try
             {
                 // 1. Locate csproj

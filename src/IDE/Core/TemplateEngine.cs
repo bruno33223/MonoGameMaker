@@ -1679,7 +1679,7 @@ namespace MonoGameMaker.Runtime
 </XnaContent>";
         }
 
-        private static string GetAiManifestTemplate(string projectName)
+        public static string GetAiManifestTemplate(string projectName)
         {
             return $@"# AI Architecture Manifest & Rules - {projectName}
 

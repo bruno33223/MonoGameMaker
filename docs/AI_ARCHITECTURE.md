@@ -78,3 +78,22 @@ The IDE's property inspector (`InspectorWindow.cs`) dynamically adapts to the se
     ```
 5.  **Simulation Lockout**:
     When play mode is active, the scene data inputs are disabled using `ImGui.BeginDisabled()` to prevent coordinate corruption, while the inspector shows live script values.
+
+---
+
+## 4. Automatic Legacy Project Migration (ProjectMigrator)
+
+To maintain backwards compatibility and simplify development workflows when legacy project folders are loaded into the editor, the IDE utilizes an automatic and idempotent migration pipeline (`ProjectMigrator.cs`).
+
+### Core Mechanism
+
+1.  **Trigger Points**:
+    - **Open Project dialog**: Runs when a user opens an existing project through the IDE UI.
+    - **Background compilation**: Triggers inside `AssemblyReloader.CompileAndLoad` to support command-line args or quick loads.
+2.  **Upgrades Applied**:
+    - **MSBuild Compliance**: Injects `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and `<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>` to support the ImGui native vertex binding layout.
+    - **Dependencies Synchronization**: Injects the appropriate `<PackageReference>` for `ImGui.NET` if it is missing.
+    - **Script Signature Refactoring**: Scans all script classes under `Scripts/`. Converts inheritance syntax from the obsolete `: IEntityScript` interface to the abstract `EntityBehavior` class. Translates the legacy `Initialize(GameEntity, Dictionary<string, string>)` method signature into `public override void Awake()` while adjusting parameter name usages inside the method body.
+3.  **Log Integration**:
+    - Build diagnostic logs and migration output are routed directly to the `ConsoleLogsWindow` using `GlobalState.Log(...)`.
+

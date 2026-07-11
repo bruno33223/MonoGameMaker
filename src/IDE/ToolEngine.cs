@@ -763,6 +763,7 @@ namespace MonoGameMaker.IDE
                         if (csprojFiles.Length > 0)
                         {
                             string name = Path.GetFileNameWithoutExtension(csprojFiles[0]);
+                            ProjectMigrator.Shift(path, GlobalState.Log);
                             GlobalState.CurrentProjectPath = path;
                             GlobalState.CurrentProjectName = name;
                             GlobalState.OpenResources.Clear();

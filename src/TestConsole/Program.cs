@@ -225,6 +225,89 @@ namespace TestConsole
                 }
             }
 
+            // 5. Test ProjectMigrator
+            Console.WriteLine("\n[TEST 5] Testing ProjectMigrator legacy conversion...");
+            
+            // Downgrade csproj: remove unsafe blocks, copy local assemblies, and ImGui references
+            string csprojText = File.ReadAllText(csprojPath);
+            csprojText = csprojText.Replace("<AllowUnsafeBlocks>true</AllowUnsafeBlocks>", "");
+            csprojText = csprojText.Replace("<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>", "");
+            // Regex remove package references for ImGui.NET
+            csprojText = System.Text.RegularExpressions.Regex.Replace(csprojText, @"<PackageReference\s+Include=""ImGui\.NET""[^>]*/>", "");
+            File.WriteAllText(csprojPath, csprojText);
+            Console.WriteLine("Downgraded csproj for migration test.");
+
+            // Create legacy script
+            string legacyScriptDir = Path.Combine(projectDir, "Scripts");
+            Directory.CreateDirectory(legacyScriptDir);
+            string legacyScriptPath = Path.Combine(legacyScriptDir, "LegacyPlayer.cs");
+            string legacyScriptCode = @"using System;
+using System.Collections.Generic;
+using MonoGameMaker.Runtime;
+
+namespace TestGame.Scripts
+{
+    public class LegacyPlayer : IEntityScript
+    {
+        public void Initialize(GameEntity targetEntity, Dictionary<string, string> customProperties)
+        {
+            targetEntity.Position = new Microsoft.Xna.Framework.Vector2(100, 150);
+            string spd = customProperties[""Speed""];
+        }
+    }
+}";
+            File.WriteAllText(legacyScriptPath, legacyScriptCode);
+            Console.WriteLine("Created legacy script LegacyPlayer.cs.");
+
+            // Execute migrator
+            MonoGameMaker.IDE.ProjectMigrator.Migrate(projectDir, Console.WriteLine);
+
+            // Assertions
+            string migratedCsprojText = File.ReadAllText(csprojPath);
+            if (!migratedCsprojText.Contains("<AllowUnsafeBlocks>true</AllowUnsafeBlocks>") ||
+                !migratedCsprojText.Contains("<CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>") ||
+                !migratedCsprojText.Contains("PackageReference Include=\"ImGui.NET\""))
+            {
+                Console.WriteLine("TEST FAILED: ProjectMigrator did not correctly restore csproj configuration.");
+                Environment.Exit(1);
+            }
+            Console.WriteLine("Assertion passed: csproj migrated successfully.");
+
+            string migratedScriptText = File.ReadAllText(legacyScriptPath);
+            if (!migratedScriptText.Contains(": EntityBehavior") ||
+                migratedScriptText.Contains("IEntityScript") ||
+                !migratedScriptText.Contains("public override void Awake()") ||
+                migratedScriptText.Contains("Initialize") ||
+                !migratedScriptText.Contains("Entity.Position") ||
+                !migratedScriptText.Contains("Properties[\"Speed\"]"))
+            {
+                Console.WriteLine("TEST FAILED: ProjectMigrator script refactoring output is incorrect.");
+                Console.WriteLine($"Migrated Script Content:\n{migratedScriptText}");
+                Environment.Exit(1);
+            }
+            Console.WriteLine("Assertion passed: Script refactored successfully.");
+
+            // Verify compiled output with migrated script
+            Console.WriteLine("Rebuilding project post-migration...");
+            using (var process = new System.Diagnostics.Process { StartInfo = processInfo })
+            {
+                process.Start();
+                string output = await process.StandardOutput.ReadToEndAsync();
+                string error = await process.StandardError.ReadToEndAsync();
+                await process.WaitForExitAsync();
+
+                if (process.ExitCode == 0)
+                {
+                    Console.WriteLine("TEST PASSED: Migrated project built successfully post-refactoring!");
+                }
+                else
+                {
+                    Console.WriteLine(output);
+                    Console.WriteLine($"TEST FAILED: Post-migration build failed. Error: {error}");
+                    Environment.Exit(1);
+                }
+            }
+
             Console.WriteLine("\n=== ALL INTEGRATION TESTS PASSED SUCCESSFULLY! ===");
         }
     }

@@ -16,6 +16,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`SceneManager`** | Synchronous level loading (`LoadScene`) and Content boots | **[SceneManager Manual](runtime/SceneManager.md)** |
 | **`TextRenderer`** | Static global text rendering and UI space printing | **[TextRenderer Manual](runtime/TextRenderer.md)** |
 | **`ImGuiUI`** | Immediate-mode UI layout drawing and canvas isolation | **[ImGuiUI Manual](runtime/ImGuiUI.md)** |
+| **`ProjectMigrator`** | Idempotent automatic migration of legacy projects and scripts | **[ProjectMigrator Manual](runtime/ProjectMigrator.md)** |
 
 ---
 
