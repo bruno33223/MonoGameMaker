@@ -1239,9 +1239,20 @@ namespace MonoGameMaker.IDE.Windows
 
                 state.SpriteBatch.End();
 
-                // 5. Draw simulation UI (Screen Space) if playing
+                GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
+
+                // Viewport mouse and coordinate translations
+                System.Numerics.Vector2 canvasSize = new System.Numerics.Vector2(desiredW, desiredH);
+                System.Numerics.Vector2 canvasPos = ImGui.GetCursorScreenPos();
+                ImGui.ImageButton($"ViewportCanvas##{absolutePath}", state.RenderTargetId, canvasSize, System.Numerics.Vector2.Zero, System.Numerics.Vector2.One);
+                bool isViewportHovered = ImGui.IsItemHovered();
+
+                // 5. Draw simulation UI (Screen Space) if playing, wrapped in a child containment window
                 if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
                 {
+                    ImGui.SetNextWindowPos(canvasPos);
+                    ImGui.BeginChild("GameRuntimeViewportZone", canvasSize, ImGuiChildFlags.None, ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoNavFocus);
+
                     try
                     {
                         Type? loadedImGuiType = AssemblyReloader.LoadedAssembly.GetType("ImGuiNET.ImGui");
@@ -1294,13 +1305,9 @@ namespace MonoGameMaker.IDE.Windows
                             }
                         }
                     }
-                }
-                GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
 
-                // Viewport mouse and coordinate translations
-                System.Numerics.Vector2 canvasSize = new System.Numerics.Vector2(desiredW, desiredH);
-                System.Numerics.Vector2 canvasPos = ImGui.GetCursorScreenPos();
-                ImGui.ImageButton($"ViewportCanvas##{absolutePath}", state.RenderTargetId, canvasSize, System.Numerics.Vector2.Zero, System.Numerics.Vector2.One);
+                    ImGui.EndChild();
+                }
 
                 // Mouse coordinates translation from window space to local scene space (since it's drawn 1:1, it's 1:1!)
                 System.Numerics.Vector2 mousePos = ImGui.GetMousePos();
@@ -1308,7 +1315,7 @@ namespace MonoGameMaker.IDE.Windows
                 float scaledY = mousePos.Y - canvasPos.Y;
 
                 // Mouse Picking logic (Z-order reverse search topmost first)
-                if (ImGui.IsItemHovered() && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+                if (isViewportHovered && !ImGui.GetIO().WantCaptureMouse && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
                 {
                     int clickedIndex = -1;
                     for (int i = state.Scene.Instances.Count - 1; i >= 0; i--)

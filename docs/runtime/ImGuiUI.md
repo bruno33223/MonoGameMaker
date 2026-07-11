@@ -93,9 +93,11 @@ namespace MyGame.Scripts
 
 ---
 
-## Input Focus & Hover Logic
+## Input Focus, Hover Logic & Spatial Containment
 
 When the simulation is active inside the IDE editor viewport:
-* **Input Routing**: Mouse clicks and keyboard focus inside any ImGui window created by game entities are safely processed by the active simulation.
+* **Viewport Containment**: All windows created by game scripts are natively enclausured within a transparent ImGui child window (`GameRuntimeViewportZone`). The boundaries of this child window match the exact dimensions of the active viewport. Attempts to drag simulated UI windows outside the boundaries will clip them visually.
+* **Input Routing**: Clicks and key presses directed at game-created ImGui windows are captured by ImGui (`ImGui.GetIO().WantCaptureMouse` is `true`), which automatically suppresses mouse picking and object selection inside the IDE canvas, preventing accidental prefab alterations.
 * **Layout Safety**: Window dragging and resizing inside the game viewport are restricted from shifting or docking authoring windows (like the Properties/Project Explorer panels), ensuring full interface isolation.
 * **ASCII Font Prohibition**: Do not generate manual character bitmaps. Always draw strings via `TextRenderer.Draw()` or `ImGui.Text()`.
+
