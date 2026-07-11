@@ -506,19 +506,23 @@ namespace MonoGameMaker.IDE.Windows
                     _editingFontPath = absolutePath;
                     if (File.Exists(absolutePath))
                     {
-                        var doc = new System.Xml.XmlDocument();
-                        doc.Load(absolutePath);
-                        _editingFontName = doc.SelectSingleNode("//FontName")?.InnerText ?? "Arial";
+                        string xml = File.ReadAllText(absolutePath);
+                        
+                        var fontMatch = System.Text.RegularExpressions.Regex.Match(xml, @"<FontName>(.*?)</FontName>");
+                        _editingFontName = fontMatch.Success ? fontMatch.Groups[1].Value : "Arial";
                         _compiledFontName = _editingFontName;
                         
-                        string sizeStr = doc.SelectSingleNode("//Size")?.InnerText ?? "14";
+                        var sizeMatch = System.Text.RegularExpressions.Regex.Match(xml, @"<Size>(.*?)</Size>");
+                        string sizeStr = sizeMatch.Success ? sizeMatch.Groups[1].Value : "14";
                         int.TryParse(sizeStr, out _editingFontSize);
                         _compiledFontSize = _editingFontSize;
                         
-                        string spacingStr = doc.SelectSingleNode("//Spacing")?.InnerText ?? "0";
+                        var spacingMatch = System.Text.RegularExpressions.Regex.Match(xml, @"<Spacing>(.*?)</Spacing>");
+                        string spacingStr = spacingMatch.Success ? spacingMatch.Groups[1].Value : "0";
                         float.TryParse(spacingStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _editingFontSpacing);
                         
-                        _editingFontStyle = doc.SelectSingleNode("//Style")?.InnerText ?? "Regular";
+                        var styleMatch = System.Text.RegularExpressions.Regex.Match(xml, @"<Style>(.*?)</Style>");
+                        _editingFontStyle = styleMatch.Success ? styleMatch.Groups[1].Value : "Regular";
                         _compiledFontStyle = _editingFontStyle;
                     }
                 }
@@ -582,22 +586,14 @@ namespace MonoGameMaker.IDE.Windows
             {
                 try
                 {
-                    var doc = new System.Xml.XmlDocument();
-                    doc.Load(absolutePath);
+                    string xml = File.ReadAllText(absolutePath);
                     
-                    var fontNameNode = doc.SelectSingleNode("//FontName");
-                    if (fontNameNode != null) fontNameNode.InnerText = _editingFontName;
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<FontName>.*?</FontName>", $"<FontName>{_editingFontName}</FontName>");
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<Size>.*?</Size>", $"<Size>{_editingFontSize}</Size>");
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<Spacing>.*?</Spacing>", $"<Spacing>{_editingFontSpacing.ToString(System.Globalization.CultureInfo.InvariantCulture)}</Spacing>");
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<Style>.*?</Style>", $"<Style>{_editingFontStyle}</Style>");
                     
-                    var sizeNode = doc.SelectSingleNode("//Size");
-                    if (sizeNode != null) sizeNode.InnerText = _editingFontSize.ToString();
-                    
-                    var spacingNode = doc.SelectSingleNode("//Spacing");
-                    if (spacingNode != null) spacingNode.InnerText = _editingFontSpacing.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                    
-                    var styleNode = doc.SelectSingleNode("//Style");
-                    if (styleNode != null) styleNode.InnerText = _editingFontStyle;
-
-                    doc.Save(absolutePath);
+                    File.WriteAllText(absolutePath, xml);
                     GlobalState.Log($"Saved spritefont properties to: {Path.GetFileName(absolutePath)}");
 
                     // Trigger MGCB compilation via RegisterAsset
