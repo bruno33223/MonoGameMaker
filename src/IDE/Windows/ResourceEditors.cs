@@ -391,14 +391,12 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                     prefab.CustomProperties.Remove(key);
                 }
 
-                ImGui.Separator();
-                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
-
+                ImGui.Text("Add Property (Key / Value):");
                 ImGui.SetNextItemWidth(100);
-                ImGui.InputText($"New Key##NewKey_{absolutePath}", ref _newPropKey, 64);
+                ImGui.InputText($"##NewKey_{absolutePath}", ref _newPropKey, 64);
                 ImGui.SameLine();
                 ImGui.SetNextItemWidth(120);
-                ImGui.InputText($"New Value##NewVal_{absolutePath}", ref _newPropValue, 128);
+                ImGui.InputText($"##NewVal_{absolutePath}", ref _newPropValue, 128);
                 ImGui.SameLine();
                 if (ImGui.Button($"Add Property##Add_{absolutePath}"))
                 {
@@ -885,14 +883,12 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                                     }
                                 }
 
-                                ImGui.Separator();
-                                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
-
+                                ImGui.Text("Add Override (Key / Value):");
                                 ImGui.SetNextItemWidth(100);
-                                ImGui.InputText($"New Key##InstNewKey_{absolutePath}", ref _newPropKey, 64);
+                                ImGui.InputText($"##InstNewKey_{absolutePath}", ref _newPropKey, 64);
                                 ImGui.SameLine();
                                 ImGui.SetNextItemWidth(120);
-                                ImGui.InputText($"New Value##InstNewVal_{absolutePath}", ref _newPropValue, 128);
+                                ImGui.InputText($"##InstNewVal_{absolutePath}", ref _newPropValue, 128);
                                 ImGui.SameLine();
                                 if (ImGui.Button($"Add Override##InstAdd_{absolutePath}"))
                                 {
