@@ -36,41 +36,101 @@ namespace MonoGameMaker.IDE.Core
 
         public static SceneData LoadScenePath(string jsonPath, Action<string> logCallback)
         {
+            var data = new SceneData();
             try
             {
                 if (File.Exists(jsonPath))
                 {
                     string jsonContent = File.ReadAllText(jsonPath);
-                    var options = new JsonSerializerOptions { IncludeFields = true };
-                    SceneData? data = null;
-                    try
+                    using (JsonDocument doc = JsonDocument.Parse(jsonContent))
                     {
-                        data = JsonSerializer.Deserialize<SceneData>(jsonContent, options);
-                    }
-                    catch
-                    {
-                        var legacyList = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent, options);
-                        if (legacyList != null)
+                        JsonElement root = doc.RootElement;
+                        
+                        if (root.ValueKind == JsonValueKind.Array)
                         {
-                            data = new SceneData
+                            // Legacy format: root is just a list of entity instances
+                            foreach (var instElement in root.EnumerateArray())
                             {
-                                Instances = legacyList
-                            };
-                        }
-                    }
-
-                    if (data != null && data.Instances != null)
-                    {
-                        foreach (var inst in data.Instances)
-                        {
-                            if (string.IsNullOrEmpty(inst.prefabName))
-                            {
-                                if (!string.IsNullOrEmpty(inst.assetId)) inst.prefabName = inst.assetId;
-                                else if (!string.IsNullOrEmpty(inst.spriteName)) inst.prefabName = inst.spriteName;
+                                try
+                                {
+                                    var inst = DeserializeEntityInstance(instElement, logCallback);
+                                    if (string.IsNullOrEmpty(inst.prefabName))
+                                    {
+                                        if (!string.IsNullOrEmpty(inst.assetId)) inst.prefabName = inst.assetId;
+                                        else if (!string.IsNullOrEmpty(inst.spriteName)) inst.prefabName = inst.spriteName;
+                                    }
+                                    data.Instances.Add(inst);
+                                }
+                                catch (Exception ex)
+                                {
+                                    logCallback($"Warning: Error deserializing legacy scene entity node: {ex.Message}");
+                                }
                             }
                         }
-                        return data;
+                        else if (root.ValueKind == JsonValueKind.Object)
+                        {
+                            // Standard SceneData format
+                            if (root.TryGetProperty("Width", out var widthProp))
+                            {
+                                try { data.Width = widthProp.GetInt32(); } catch { data.Width = 1280; }
+                            }
+                            if (root.TryGetProperty("Height", out var heightProp))
+                            {
+                                try { data.Height = heightProp.GetInt32(); } catch { data.Height = 720; }
+                            }
+                            if (root.TryGetProperty("BackgroundImage", out var bgProp))
+                            {
+                                try { data.BackgroundImage = bgProp.GetString() ?? ""; } catch { data.BackgroundImage = ""; }
+                            }
+                            if (root.TryGetProperty("BackgroundColor", out var bgColorProp))
+                            {
+                                try
+                                {
+                                    float x = 0.1f, y = 0.1f, z = 0.2f;
+                                    if (bgColorProp.ValueKind == JsonValueKind.Object)
+                                    {
+                                        if (bgColorProp.TryGetProperty("X", out var px)) x = px.GetSingle();
+                                        if (bgColorProp.TryGetProperty("Y", out var py)) y = py.GetSingle();
+                                        if (bgColorProp.TryGetProperty("Z", out var pz)) z = pz.GetSingle();
+                                    }
+                                    else if (bgColorProp.ValueKind == JsonValueKind.Array && bgColorProp.GetArrayLength() >= 3)
+                                    {
+                                        x = bgColorProp[0].GetSingle();
+                                        y = bgColorProp[1].GetSingle();
+                                        z = bgColorProp[2].GetSingle();
+                                    }
+                                    data.BackgroundColor = new System.Numerics.Vector3(x, y, z);
+                                }
+                                catch (Exception ex)
+                                {
+                                    logCallback($"Warning parsing BackgroundColor: {ex.Message}");
+                                    data.BackgroundColor = new System.Numerics.Vector3(0.1f, 0.1f, 0.2f);
+                                }
+                            }
+
+                            if (root.TryGetProperty("Instances", out var instancesProp) && instancesProp.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var instElement in instancesProp.EnumerateArray())
+                                {
+                                    try
+                                    {
+                                        var inst = DeserializeEntityInstance(instElement, logCallback);
+                                        if (string.IsNullOrEmpty(inst.prefabName))
+                                        {
+                                            if (!string.IsNullOrEmpty(inst.assetId)) inst.prefabName = inst.assetId;
+                                            else if (!string.IsNullOrEmpty(inst.spriteName)) inst.prefabName = inst.spriteName;
+                                        }
+                                        data.Instances.Add(inst);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        logCallback($"Warning: Error deserializing scene entity node: {ex.Message}");
+                                    }
+                                }
+                            }
+                        }
                     }
+                    return data;
                 }
             }
             catch (Exception ex)
@@ -78,6 +138,58 @@ namespace MonoGameMaker.IDE.Core
                 logCallback($"Error loading scene configuration: {ex.Message}");
             }
             return new SceneData();
+        }
+
+        private static EntityInstance DeserializeEntityInstance(JsonElement element, Action<string> logCallback)
+        {
+            var inst = new EntityInstance();
+            if (element.ValueKind != JsonValueKind.Object)
+            {
+                throw new ArgumentException("Scene entity node is not a JSON object");
+            }
+
+            foreach (var prop in element.EnumerateObject())
+            {
+                try
+                {
+                    switch (prop.Name.ToLower())
+                    {
+                        case "prefabname":
+                            inst.prefabName = prop.Value.GetString() ?? string.Empty;
+                            break;
+                        case "x":
+                            inst.x = prop.Value.GetSingle();
+                            break;
+                        case "y":
+                            inst.y = prop.Value.GetSingle();
+                            break;
+                        case "assetid":
+                            inst.assetId = prop.Value.GetString();
+                            break;
+                        case "spritename":
+                            inst.spriteName = prop.Value.GetString();
+                            break;
+                        case "customproperties":
+                            if (prop.Value.ValueKind == JsonValueKind.Object)
+                            {
+                                foreach (var subProp in prop.Value.EnumerateObject())
+                                {
+                                    inst.CustomProperties[subProp.Name] = subProp.Value.ToString();
+                                }
+                            }
+                            break;
+                        default:
+                            // Flexible dictionary/generic fallback for unexpected properties
+                            inst.CustomProperties[prop.Name] = prop.Value.ToString();
+                            break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logCallback($"Warning parsing entity property '{prop.Name}': {ex.Message}");
+                }
+            }
+            return inst;
         }
 
         public static bool SaveScene(string projectRoot, SceneData sceneData, Action<string> logCallback)

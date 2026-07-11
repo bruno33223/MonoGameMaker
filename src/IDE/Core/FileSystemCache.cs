@@ -62,10 +62,17 @@ namespace MonoGameMaker.IDE.Core
         private void OnFileSystemChanged(object? sender, FileSystemEventArgs e)
         {
             if (_debounceTimer == null) return;
+            if (AssetPipelineSynchronizer.IsProcessing) return;
+            if (ToolEngine.IsPlaying) return;
 
             // Restart the debounce window
             _debounceTimer.Stop();
             _debounceTimer.Start();
+        }
+
+        public void ForceRebuild()
+        {
+            TriggerRebuild();
         }
 
         private void TriggerRebuild()

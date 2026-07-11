@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Diagnostics;
+using System.Threading.Tasks;
 using ImGuiNET;
 using ImGuiColorTextEditNet;
 using Microsoft.Xna.Framework;
@@ -168,7 +169,11 @@ namespace MonoGameMaker.IDE.Windows
                 ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f), "Enter absolute path or click 'Browse...'");
                 ImGui.Dummy(new System.Numerics.Vector2(0, 5));
 
-                if (ImGui.Button("Import Asset", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                if (ToolEngine.IsPlaying)
+                {
+                    ImGui.TextDisabled("Cannot import assets while simulation is active.");
+                }
+                else if (ImGui.Button("Import Asset", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
                     if (string.IsNullOrEmpty(importPath) || !File.Exists(importPath))
                     {
@@ -176,12 +181,21 @@ namespace MonoGameMaker.IDE.Windows
                     }
                     else
                     {
-                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath!, importPath, folderName, GlobalState.Log);
-                        if (success)
+                        string pathToImport = importPath;
+                        string folder = folderName;
+                        string absPath = absolutePath;
+                        lock (_importPaths)
                         {
-                            GlobalState.Log($"Successfully imported asset into {folderName}.");
-                            _importPaths[absolutePath] = ""; // Clear path
+                            _importPaths[absPath] = ""; // Clear path
                         }
+                        _ = Task.Run(async () =>
+                        {
+                            bool success = await AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath!, pathToImport, folder, GlobalState.Log);
+                            if (success)
+                            {
+                                GlobalState.Log($"Successfully imported asset into {folder}.");
+                            }
+                        });
                     }
                 }
             }
@@ -526,16 +540,24 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 relativePath.StartsWith("Content/Audio/") || 
                 relativePath.StartsWith("Content/Models/"))
             {
-                if (ImGui.Button("Delete Asset From Project", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
+                if (ToolEngine.IsPlaying)
+                {
+                    ImGui.TextDisabled("Cannot delete assets while simulation is active.");
+                }
+                else if (ImGui.Button("Delete Asset From Project", new System.Numerics.Vector2(ImGui.GetContentRegionAvail().X, 30)))
                 {
                     TextureCache.Unload(absolutePath);
-                    bool success = AssetPipelineSynchronizer.UnregisterAsset(GlobalState.CurrentProjectPath!, relativePath, GlobalState.Log);
-                    if (success)
+                    string selectedRes = relativePath;
+                    _ = Task.Run(async () =>
                     {
-                        GlobalState.SelectedResourcePath = null;
-                        GlobalState.OpenResources.Remove(relativePath);
-                        GlobalState.Log($"Asset {fileName} removed.");
-                    }
+                        bool success = await AssetPipelineSynchronizer.UnregisterAsset(GlobalState.CurrentProjectPath!, selectedRes, GlobalState.Log);
+                        if (success)
+                        {
+                            GlobalState.Log($"Asset {fileName} removed.");
+                        }
+                    });
+                    GlobalState.SelectedResourcePath = null;
+                    GlobalState.OpenResources.Remove(relativePath);
                 }
             }
             else if (relativePath.StartsWith("Scripts/"))

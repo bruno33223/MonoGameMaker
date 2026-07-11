@@ -99,7 +99,7 @@ namespace TestConsole
 
             // Register asset
             Console.WriteLine("Registering mock sprite in asset pipeline...");
-            bool registerSuccess = AssetPipelineSynchronizer.RegisterAsset(projectDir, mockSpritePath, "Textures", Console.WriteLine);
+            bool registerSuccess = AssetPipelineSynchronizer.RegisterAsset(projectDir, mockSpritePath, "Textures", Console.WriteLine).GetAwaiter().GetResult();
             if (!registerSuccess)
             {
                 Console.WriteLine("TEST FAILED: Asset pipeline registration failed.");

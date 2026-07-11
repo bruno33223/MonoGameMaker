@@ -19,6 +19,12 @@ namespace MonoGameMaker.IDE.Windows
                 return;
             }
 
+            if (AssetPipelineSynchronizer.IsProcessing)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(1.0f, 0.8f, 0.2f, 1f), "⚡ Compiling assets (MGCB)...");
+                ImGui.Separator();
+            }
+
             if (GlobalState.CurrentProjectCache == null)
             {
                 ImGui.Text("Loading project tree...");
@@ -107,7 +113,11 @@ namespace MonoGameMaker.IDE.Windows
                     string folderName = Path.GetFileName(relativePath);
                     if (folderName == "Prefabs")
                     {
-                        if (ImGui.MenuItem("Create New Prefab"))
+                        if (ToolEngine.IsPlaying)
+                        {
+                            ImGui.TextDisabled("Cannot create prefabs during simulation");
+                        }
+                        else if (ImGui.MenuItem("Create New Prefab"))
                         {
                             GlobalState.SelectedResourcePath = relativePath;
                             CreateNewPrefab(node.FullPath);

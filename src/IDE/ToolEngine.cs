@@ -19,6 +19,10 @@ namespace MonoGameMaker.IDE
         private bool _showNewProjectPopup;
         private bool _showOpenProjectPopup;
 
+        // Simulation / Play State
+        public static bool IsPlaying { get; set; } = false;
+        private bool _isLayoutReady = false;
+
         // Layout States
         private bool _isFirstFrame = true;
         private bool _resetLayout;
@@ -75,14 +79,15 @@ namespace MonoGameMaker.IDE
 
         protected override void Update(GameTime gameTime)
         {
+            UpdateEditor(gameTime);
             base.Update(gameTime);
         }
 
-        protected override void Draw(GameTime gameTime)
+        private void UpdateEditor(GameTime gameTime)
         {
-            GraphicsDevice.Clear(new Color(25, 25, 25));
+            if (_isLayoutReady) return;
 
-            // Start ImGui Layout
+            // Process input events and begin ImGui frame
             _imGuiRenderer.BeforeLayout(gameTime);
 
             // Render Fullscreen Dockspace
@@ -101,8 +106,19 @@ namespace MonoGameMaker.IDE
             // End main dockspace wrapper window
             ImGui.End();
 
-            // Render ImGui to Screen
-            _imGuiRenderer.AfterLayout();
+            _isLayoutReady = true;
+        }
+
+        protected override void Draw(GameTime gameTime)
+        {
+            GraphicsDevice.Clear(new Color(25, 25, 25));
+
+            if (_isLayoutReady)
+            {
+                // Render ImGui to Screen
+                _imGuiRenderer.AfterLayout();
+                _isLayoutReady = false;
+            }
 
             base.Draw(gameTime);
         }
@@ -266,6 +282,31 @@ namespace MonoGameMaker.IDE
                     }
                     ImGui.PopStyleColor();
                 }
+
+                ImGui.SameLine();
+
+                // Simulation mode toggle
+                if (IsPlaying)
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.85f, 0.45f, 0.0f, 1.0f));
+                    if (ImGui.Button("Pause Simulation", new System.Numerics.Vector2(140, 0)))
+                    {
+                        IsPlaying = false;
+                        GlobalState.Log("Simulation paused. Editor updates resumed.");
+                    }
+                    ImGui.PopStyleColor();
+                }
+                else
+                {
+                    ImGui.PushStyleColor(ImGuiCol.Button, new System.Numerics.Vector4(0.18f, 0.45f, 0.85f, 1.0f));
+                    if (ImGui.Button("Start Simulation", new System.Numerics.Vector2(140, 0)))
+                    {
+                        IsPlaying = true;
+                        GlobalState.Log("Simulation started. Editor updates suspended.");
+                    }
+                    ImGui.PopStyleColor();
+                }
+
                 ImGui.SameLine();
                 ImGui.Text($"Active Project: {GlobalState.CurrentProjectName} | Path: {GlobalState.CurrentProjectPath}");
             }
@@ -560,6 +601,12 @@ namespace MonoGameMaker.IDE
 
         private void OnFileDrop(object? sender, FileDropEventArgs e)
         {
+            if (IsPlaying)
+            {
+                GlobalState.Log("Error: Cannot import files while simulation is active.");
+                return;
+            }
+
             if (string.IsNullOrEmpty(GlobalState.CurrentProjectPath))
             {
                 GlobalState.Log("Error: Open a project before dragging files in.");
@@ -579,18 +626,27 @@ namespace MonoGameMaker.IDE
                 {
                     if (extension == ".png" || extension == ".jpg" || extension == ".jpeg")
                     {
-                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Textures", GlobalState.Log);
-                        if (success) GlobalState.Log($"Successfully imported texture: {fileName}");
+                        _ = Task.Run(async () =>
+                        {
+                            bool success = await AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Textures", GlobalState.Log);
+                            if (success) GlobalState.Log($"Successfully imported texture: {fileName}");
+                        });
                     }
                     else if (extension == ".wav" || extension == ".mp3")
                     {
-                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Audio", GlobalState.Log);
-                        if (success) GlobalState.Log($"Successfully imported audio: {fileName}");
+                        _ = Task.Run(async () =>
+                        {
+                            bool success = await AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Audio", GlobalState.Log);
+                            if (success) GlobalState.Log($"Successfully imported audio: {fileName}");
+                        });
                     }
                     else if (extension == ".fbx" || extension == ".obj")
                     {
-                        bool success = AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Models", GlobalState.Log);
-                        if (success) GlobalState.Log($"Successfully imported model: {fileName}");
+                        _ = Task.Run(async () =>
+                        {
+                            bool success = await AssetPipelineSynchronizer.RegisterAsset(GlobalState.CurrentProjectPath, filePath, "Models", GlobalState.Log);
+                            if (success) GlobalState.Log($"Successfully imported model: {fileName}");
+                        });
                     }
                     else if (extension == ".cs")
                     {
