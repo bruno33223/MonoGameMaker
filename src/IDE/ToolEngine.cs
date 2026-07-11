@@ -277,6 +277,27 @@ namespace MonoGameMaker.IDE
 
             if (GlobalState.IsPlaying)
             {
+                if (AssemblyReloader.LoadedAssembly != null)
+                {
+                    try
+                    {
+                        Type? loadedImGuiType = AssemblyReloader.LoadedAssembly.GetType("ImGuiNET.ImGui");
+                        if (loadedImGuiType != null)
+                        {
+                            var setCurrentContextMethod = loadedImGuiType.GetMethod("SetCurrentContext", BindingFlags.Public | BindingFlags.Static);
+                            if (setCurrentContextMethod != null)
+                            {
+                                IntPtr currentContext = ImGuiNET.ImGui.GetCurrentContext();
+                                setCurrentContextMethod.Invoke(null, new object[] { currentContext });
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalState.Log($"Error synchronizing ImGui context to simulation assembly: {ex.Message}");
+                    }
+                }
+
                 // Run target project's EntityManager.Update via reflection
                 Type? entityManagerType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.EntityManager");
                 if (entityManagerType != null)
