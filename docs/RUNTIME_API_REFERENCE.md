@@ -19,6 +19,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`ProjectMigrator`** | Idempotent automatic migration of legacy projects and scripts | **[ProjectMigrator Manual](runtime/ProjectMigrator.md)** |
 | **`SimulationStates`** | Control simulation loop (Play, Pause, Step) and focus-based input isolation | **[SimulationStates Manual](runtime/SimulationStates.md)** |
 | **`SaveSystem`** | JSON-based Save/Load persistence for GameState variables | **[SaveSystem Manual](runtime/SaveSystem.md)** |
+| **`FileManagement`** | Active hub context creations and background deletion pipeline | **[FileManagement Manual](runtime/FileManagement.md)** |
 
 ---
 
