@@ -1162,7 +1162,7 @@ namespace {projectName}
         public Game1()
         {{
             _graphics = new GraphicsDeviceManager(this);
-            Content.RootDirectory = ""Content"";
+            Content = new SafeContentManager(Services, ""Content"");
             IsMouseVisible = true;
             
             _graphics.PreferredBackBufferWidth = 1280;
@@ -1245,6 +1245,33 @@ namespace {projectName}
             _imguiRenderer.AfterLayout();
 
             base.Draw(gameTime);
+        }}
+    }}
+
+    public class SafeContentManager : Microsoft.Xna.Framework.Content.ContentManager
+    {{
+        public SafeContentManager(System.IServiceProvider serviceProvider, string rootDirectory) 
+            : base(serviceProvider, rootDirectory)
+        {{
+        }}
+
+        protected override System.IO.Stream OpenStream(string assetName)
+        {{
+            string baseDir = System.AppDomain.CurrentDomain.BaseDirectory;
+            string path = System.IO.Path.Combine(baseDir, RootDirectory, assetName) + "".xnb"";
+            if (!System.IO.File.Exists(path))
+            {{
+                return base.OpenStream(assetName);
+            }}
+            try
+            {{
+                byte[] bytes = System.IO.File.ReadAllBytes(path);
+                return new System.IO.MemoryStream(bytes);
+            }}
+            catch
+            {{
+                return base.OpenStream(assetName);
+            }}
         }}
     }}
 }}

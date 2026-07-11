@@ -34,6 +34,9 @@ namespace MonoGameMaker.IDE
                 string projectName = csprojs.Length > 0 ? Path.GetFileNameWithoutExtension(csprojs[0]) : "Project";
                 MigrateAiManifests(projectRoot, projectName, logCallback);
 
+                // Migrate Game1.cs to use SafeContentManager
+                MigrateGame1(projectRoot, logCallback);
+
                 // Migrate legacy scripts
                 MigrateScripts(projectRoot, logCallback);
 
@@ -214,6 +217,86 @@ namespace MonoGameMaker.IDE
             catch (Exception ex)
             {
                 logCallback($"Migration Error: Failed to scan or process scripts: {ex.Message}");
+            }
+        }
+
+        private static void MigrateGame1(string projectRoot, Action<string> logCallback)
+        {
+            try
+            {
+                string game1Path = Path.Combine(projectRoot, "Game1.cs");
+                if (!File.Exists(game1Path))
+                {
+                    return;
+                }
+
+                string content = File.ReadAllText(game1Path);
+                bool modified = false;
+
+                // 1. If it doesn't contain SafeContentManager, append it to the end before the last closing brace
+                if (!content.Contains("class SafeContentManager", StringComparison.OrdinalIgnoreCase))
+                {
+                    int lastBrace = content.LastIndexOf('}');
+                    if (lastBrace >= 0)
+                    {
+                        string safeContentManagerClass = @"
+    public class SafeContentManager : Microsoft.Xna.Framework.Content.ContentManager
+    {
+        public SafeContentManager(System.IServiceProvider serviceProvider, string rootDirectory) 
+            : base(serviceProvider, rootDirectory)
+        {
+        }
+
+        protected override System.IO.Stream OpenStream(string assetName)
+        {
+            string baseDir = System.AppDomain.CurrentDomain.BaseDirectory;
+            string path = System.IO.Path.Combine(baseDir, RootDirectory, assetName) + "".xnb"";
+            if (!System.IO.File.Exists(path))
+            {
+                return base.OpenStream(assetName);
+            }
+            try
+            {
+                byte[] bytes = System.IO.File.ReadAllBytes(path);
+                return new System.IO.MemoryStream(bytes);
+            }
+            catch
+            {
+                return base.OpenStream(assetName);
+            }
+        }
+    }
+";
+                        content = content.Insert(lastBrace, safeContentManagerClass);
+                        modified = true;
+                        logCallback("Migration: Appended SafeContentManager helper to Game1.cs.");
+                    }
+                }
+
+                // 2. If it contains Content.RootDirectory = "Content"; or similar, replace it with Content = new SafeContentManager(Services, "Content");
+                if (content.Contains("Content.RootDirectory = \"Content\";") || content.Contains("Content.RootDirectory = \"\"Content\"\";"))
+                {
+                    content = content.Replace("Content.RootDirectory = \"Content\";", "Content = new SafeContentManager(Services, \"Content\");");
+                    content = content.Replace("Content.RootDirectory = \"\"Content\"\";", "Content = new SafeContentManager(Services, \"\"Content\"\");");
+                    modified = true;
+                    logCallback("Migration: Updated Game1 constructor to instantiate SafeContentManager.");
+                }
+                else if (content.Contains("Content.RootDirectory = ") && !content.Contains("new SafeContentManager"))
+                {
+                    content = Regex.Replace(content, @"Content\.RootDirectory\s*=\s*""Content"";", "Content = new SafeContentManager(Services, \"Content\");");
+                    content = Regex.Replace(content, @"Content\.RootDirectory\s*=\s*""""Content"""";", "Content = new SafeContentManager(Services, \"Content\");");
+                    modified = true;
+                    logCallback("Migration: Updated Game1 constructor to instantiate SafeContentManager.");
+                }
+
+                if (modified)
+                {
+                    File.WriteAllText(game1Path, content);
+                }
+            }
+            catch (Exception ex)
+            {
+                logCallback($"Migration Error: Failed to migrate Game1.cs: {ex.Message}");
             }
         }
     }
