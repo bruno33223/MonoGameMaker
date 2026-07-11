@@ -54,9 +54,16 @@ namespace MonoGameMaker.IDE.Core
 
                     string destFilePath = Path.Combine(destDir, fileName);
                     
-                    // Copy the file physically
-                    File.Copy(sourceFilePath, destFilePath, overwrite: true);
-                    logCallback($"Copied asset to physical path: {destFilePath}");
+                    // Copy the file physically if they are different paths
+                    if (string.Compare(Path.GetFullPath(sourceFilePath), Path.GetFullPath(destFilePath), StringComparison.OrdinalIgnoreCase) != 0)
+                    {
+                        File.Copy(sourceFilePath, destFilePath, overwrite: true);
+                        logCallback($"Copied asset to physical path: {destFilePath}");
+                    }
+                    else
+                    {
+                        logCallback($"Asset already in project destination path: {destFilePath}");
+                    }
 
                     // Register in MGCB
                     string mgcbPath = Path.Combine(projectRoot, "Content", "Content.mgcb");

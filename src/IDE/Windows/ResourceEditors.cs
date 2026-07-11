@@ -78,6 +78,10 @@ namespace MonoGameMaker.IDE.Windows
         private static float _editingFontSpacing = 0f;
         private static string _editingFontStyle = "Regular";
 
+        private static string _compiledFontName = "Arial";
+        private static int _compiledFontSize = 14;
+        private static string _compiledFontStyle = "Regular";
+
         private static RenderTarget2D? _fontPreviewRenderTarget;
         private static IntPtr _fontPreviewRenderTargetId = IntPtr.Zero;
         private static SpriteBatch? _fontPreviewSpriteBatch;
@@ -512,14 +516,17 @@ namespace MonoGameMaker.IDE.Windows
                         var doc = new System.Xml.XmlDocument();
                         doc.Load(absolutePath);
                         _editingFontName = doc.SelectSingleNode("//FontName")?.InnerText ?? "Arial";
+                        _compiledFontName = _editingFontName;
                         
                         string sizeStr = doc.SelectSingleNode("//Size")?.InnerText ?? "14";
                         int.TryParse(sizeStr, out _editingFontSize);
+                        _compiledFontSize = _editingFontSize;
                         
                         string spacingStr = doc.SelectSingleNode("//Spacing")?.InnerText ?? "0";
                         float.TryParse(spacingStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _editingFontSpacing);
                         
                         _editingFontStyle = doc.SelectSingleNode("//Style")?.InnerText ?? "Regular";
+                        _compiledFontStyle = _editingFontStyle;
                     }
                 }
                 catch (Exception ex)
@@ -609,6 +616,9 @@ namespace MonoGameMaker.IDE.Windows
                         if (success)
                         {
                             GlobalState.Log($"Successfully compiled spritefont: {Path.GetFileNameWithoutExtension(absolutePath)}");
+                            _compiledFontName = _editingFontName;
+                            _compiledFontSize = _editingFontSize;
+                            _compiledFontStyle = _editingFontStyle;
                             _loadedFontName = ""; // Force reload of preview font next frame
                         }
                     });
@@ -620,6 +630,21 @@ namespace MonoGameMaker.IDE.Windows
             }
 
             ImGui.Dummy(new System.Numerics.Vector2(0, 10));
+            
+            bool isModified = (_editingFontName != _compiledFontName) || 
+                              (_editingFontSize != _compiledFontSize) || 
+                              (_editingFontStyle != _compiledFontStyle);
+
+            if (isModified)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(1f, 0.8f, 0.2f, 1f), "⚠️ Properties modified. Click 'Save and Compile Font' to apply.");
+            }
+            else
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(0.2f, 0.8f, 0.4f, 1f), "✓ Font is compiled and up-to-date.");
+            }
+
+            ImGui.Dummy(new System.Numerics.Vector2(0, 5));
             ImGui.Text("WYSIWYG Preview:");
 
             // Load SpriteFont preview if available
@@ -684,16 +709,23 @@ namespace MonoGameMaker.IDE.Windows
                 catch { }
             }
 
+            // Real-time scale logic
+            float scale = 1.0f;
+            if (_compiledFontSize > 0)
+            {
+                scale = (float)_editingFontSize / _compiledFontSize;
+            }
+
             _fontPreviewSpriteBatch.Begin();
             if (drawFont != null)
             {
-                _fontPreviewSpriteBatch.DrawString(drawFont, previewText, new Vector2(10, 10), Microsoft.Xna.Framework.Color.White);
+                _fontPreviewSpriteBatch.DrawString(drawFont, previewText, new Vector2(10, 10), Microsoft.Xna.Framework.Color.White, 0f, Vector2.Zero, scale, Microsoft.Xna.Framework.Graphics.SpriteEffects.None, 0f);
             }
             _fontPreviewSpriteBatch.End();
 
             gd.SetRenderTargets(currentTargets);
 
-            ImGui.BeginChild("FontPreviewCanvas", new System.Numerics.Vector2(0, 130), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar);
+            ImGui.BeginChild("FontPreviewCanvas", new System.Numerics.Vector2(0, 150), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar);
             
             System.Numerics.Vector4 textColor = new System.Numerics.Vector4(1f, 1f, 1f, 1f);
             if (_editingFontStyle == "Bold")
