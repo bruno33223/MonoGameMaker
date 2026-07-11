@@ -8,6 +8,12 @@ Mono GameMaker is a lightweight, pragmatically designed C# desktop IDE built spe
 | :---: | :---: | :---: |
 | ![Workspace Layout](readme/version_1.jpeg) | ![Code Editor](readme/version_1_inspector.jpg) | ![Open Project](readme/version_1_open.jpg) |
 
+## Game Examples
+
+| Pong Gameplay | Flappy Bird Gameplay | Flappy Bird Game Over |
+| :---: | :---: | :---: |
+| ![Pong Gameplay](readme/pong_game_example.jpg) | ![Flappy Bird Gameplay](readme/fab_bird_gameplay.jpg) | ![Flappy Bird Game Over](readme/fap_bird_gameover.jpg) |
+
 ## Documentação do Ecossistema
 
 Explore the detailed sub-system documentation:
