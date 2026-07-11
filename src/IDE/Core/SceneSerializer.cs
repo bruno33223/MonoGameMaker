@@ -14,37 +14,66 @@ namespace MonoGameMaker.IDE.Core
             public float y { get; set; }
         }
 
-        public static List<EntityInstance> LoadScene(string projectRoot, Action<string> logCallback)
+        public class SceneData
+        {
+            public int Width { get; set; } = 1280;
+            public int Height { get; set; } = 720;
+            public System.Numerics.Vector3 BackgroundColor { get; set; } = new System.Numerics.Vector3(0.1f, 0.1f, 0.2f);
+            public string BackgroundImage { get; set; } = string.Empty;
+            public List<EntityInstance> Instances { get; set; } = new List<EntityInstance>();
+        }
+
+        public static SceneData LoadScene(string projectRoot, Action<string> logCallback)
         {
             string jsonPath = Path.Combine(projectRoot, "Content", "Scenes", "scene_init.json");
             return LoadScenePath(jsonPath, logCallback);
         }
 
-        public static List<EntityInstance> LoadScenePath(string jsonPath, Action<string> logCallback)
+        public static SceneData LoadScenePath(string jsonPath, Action<string> logCallback)
         {
             try
             {
                 if (File.Exists(jsonPath))
                 {
                     string jsonContent = File.ReadAllText(jsonPath);
-                    var list = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent);
-                    return list ?? new List<EntityInstance>();
+                    // Try parsing as the new SceneData structure first
+                    try
+                    {
+                        var options = new JsonSerializerOptions { IncludeFields = true };
+                        var data = JsonSerializer.Deserialize<SceneData>(jsonContent, options);
+                        if (data != null && data.Instances != null)
+                        {
+                            return data;
+                        }
+                    }
+                    catch
+                    {
+                        // Fallback: try parsing as legacy List<EntityInstance> array
+                        var legacyList = JsonSerializer.Deserialize<List<EntityInstance>>(jsonContent);
+                        if (legacyList != null)
+                        {
+                            return new SceneData
+                            {
+                                Instances = legacyList
+                            };
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 logCallback($"Error loading scene configuration: {ex.Message}");
             }
-            return new List<EntityInstance>();
+            return new SceneData();
         }
 
-        public static bool SaveScene(string projectRoot, List<EntityInstance> instances, Action<string> logCallback)
+        public static bool SaveScene(string projectRoot, SceneData sceneData, Action<string> logCallback)
         {
             string jsonPath = Path.Combine(projectRoot, "Content", "Scenes", "scene_init.json");
-            return SaveScenePath(jsonPath, instances, logCallback);
+            return SaveScenePath(jsonPath, sceneData, logCallback);
         }
 
-        public static bool SaveScenePath(string jsonPath, List<EntityInstance> instances, Action<string> logCallback)
+        public static bool SaveScenePath(string jsonPath, SceneData sceneData, Action<string> logCallback)
         {
             try
             {
@@ -54,8 +83,8 @@ namespace MonoGameMaker.IDE.Core
                     Directory.CreateDirectory(dir);
                 }
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                string jsonContent = JsonSerializer.Serialize(instances, options);
+                var options = new JsonSerializerOptions { WriteIndented = true, IncludeFields = true };
+                string jsonContent = JsonSerializer.Serialize(sceneData, options);
                 
                 File.WriteAllText(jsonPath, jsonContent);
                 logCallback($"Saved scene configuration to {jsonPath}");

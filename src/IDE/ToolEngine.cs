@@ -58,6 +58,11 @@ namespace MonoGameMaker.IDE
             ImGui.GetIO().ConfigFlags |= ImGuiConfigFlags.DockingEnable;
 
             GlobalState.GraphicsDevice = GraphicsDevice;
+            
+            var pixelTex = new Texture2D(GraphicsDevice, 1, 1);
+            pixelTex.SetData(new[] { Microsoft.Xna.Framework.Color.White });
+            GlobalState.PixelTexture = pixelTex;
+
             // Initialize preview texture cache
             TextureCache.Initialize(GraphicsDevice, _imGuiRenderer);
 

@@ -107,13 +107,19 @@ namespace TestConsole
 
             // 3. Serialize Scene Configuration
             Console.WriteLine("\n[TEST 3] Generating scene_init.json...");
-            var instances = new List<SceneSerializer.EntityInstance>
+            var sceneData = new SceneSerializer.SceneData
             {
-                new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 150, y = 200 },
-                new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 400, y = 350 }
+                Width = 1280,
+                Height = 720,
+                BackgroundColor = new System.Numerics.Vector3(0.1f, 0.1f, 0.2f),
+                Instances = new List<SceneSerializer.EntityInstance>
+                {
+                    new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 150, y = 200 },
+                    new SceneSerializer.EntityInstance { assetId = "mock_sprite", x = 400, y = 350 }
+                }
             };
 
-            bool serializeSuccess = SceneSerializer.SaveScene(projectDir, instances, Console.WriteLine);
+            bool serializeSuccess = SceneSerializer.SaveScene(projectDir, sceneData, Console.WriteLine);
             if (!serializeSuccess)
             {
                 Console.WriteLine("TEST FAILED: Scene serialization failed.");
