@@ -188,13 +188,15 @@ namespace MonoGameMaker.IDE.Core
 
         private static string GetIEntityScriptCode()
         {
-            return @"using Microsoft.Xna.Framework;
+            return @"using System.Collections.Generic;
+using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 
 namespace MonoGameMaker.Runtime
 {
     public interface IEntityScript
     {
+        void Initialize(GameEntity entity, Dictionary<string, string> properties);
         void Update(GameTime gameTime);
         void Draw(SpriteBatch spriteBatch);
     }
@@ -258,6 +260,7 @@ namespace MonoGameMaker.Runtime
 
                             string textureName = """";
                             string scriptName = """";
+                            var instPrefab = new PrefabData();
 
                             if (File.Exists(prefabPath))
                             {
@@ -267,6 +270,7 @@ namespace MonoGameMaker.Runtime
                                     var prefabData = JsonSerializer.Deserialize<PrefabData>(prefabJson);
                                     if (prefabData != null)
                                     {
+                                        instPrefab = prefabData;
                                         textureName = prefabData.TextureName;
                                         scriptName = prefabData.ScriptName;
                                     }
@@ -331,13 +335,44 @@ namespace MonoGameMaker.Runtime
                                 }
                             }
 
-                            entities.Add(new GameEntity
+                            // Merge properties
+                            var mergedProps = new Dictionary<string, string>();
+                            if (instPrefab.CustomProperties != null)
+                            {
+                                foreach (var kv in instPrefab.CustomProperties)
+                                {
+                                    mergedProps[kv.Key] = kv.Value;
+                                }
+                            }
+                            if (inst.CustomProperties != null)
+                            {
+                                foreach (var kv in inst.CustomProperties)
+                                {
+                                    mergedProps[kv.Key] = kv.Value;
+                                }
+                            }
+
+                            var gameEntity = new GameEntity
                             {
                                 PrefabName = inst.prefabName,
                                 Texture = texture,
                                 Position = new Vector2(inst.x, inst.y),
                                 Script = scriptInstance
-                            });
+                            };
+
+                            if (scriptInstance != null)
+                            {
+                                try
+                                {
+                                    scriptInstance.Initialize(gameEntity, mergedProps);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Console.WriteLine($""Error initializing script: {ex.Message}"");
+                                }
+                            }
+
+                            entities.Add(gameEntity);
                         }
                     }
                 }
@@ -368,6 +403,7 @@ namespace MonoGameMaker.Runtime
         public string prefabName { get; set; } = string.Empty;
         public float x { get; set; }
         public float y { get; set; }
+        public Dictionary<string, string> CustomProperties { get; set; } = new Dictionary<string, string>();
     }
 
     public class PrefabData
@@ -375,6 +411,7 @@ namespace MonoGameMaker.Runtime
         public string TextureName { get; set; } = string.Empty;
         public string ScriptName { get; set; } = string.Empty;
         public string Tag { get; set; } = ""Default"";
+        public Dictionary<string, string> CustomProperties { get; set; } = new Dictionary<string, string>();
     }
 
     public class GameEntity

@@ -133,7 +133,12 @@ namespace TestConsole
             {
                 TextureName = "mock_sprite",
                 ScriptName = "MockScript",
-                Tag = "Player"
+                Tag = "Player",
+                CustomProperties = new Dictionary<string, string>
+                {
+                    { "Speed", "150" },
+                    { "Health", "100" }
+                }
             };
 
             bool savePrefabSuccess = PrefabSerializer.SavePrefab(mockPrefabPath, prefabData, Console.WriteLine);
@@ -150,8 +155,19 @@ namespace TestConsole
                 BackgroundColor = new System.Numerics.Vector3(0.1f, 0.1f, 0.2f),
                 Instances = new List<SceneSerializer.EntityInstance>
                 {
-                    new SceneSerializer.EntityInstance { prefabName = "mock_prefab", x = 150, y = 200 },
-                    new SceneSerializer.EntityInstance { prefabName = "mock_prefab", x = 400, y = 350 }
+                    new SceneSerializer.EntityInstance 
+                    { 
+                        prefabName = "mock_prefab", 
+                        x = 150, 
+                        y = 200,
+                        CustomProperties = new Dictionary<string, string> { { "Speed", "300" } }
+                    },
+                    new SceneSerializer.EntityInstance 
+                    { 
+                        prefabName = "mock_prefab", 
+                        x = 400, 
+                        y = 350 
+                    }
                 }
             };
 

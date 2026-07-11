@@ -12,6 +12,7 @@ namespace MonoGameMaker.IDE.Core
             public string prefabName { get; set; } = string.Empty;
             public float x { get; set; }
             public float y { get; set; }
+            public System.Collections.Generic.Dictionary<string, string> CustomProperties { get; set; } = new();
 
             // Backward compatibility properties
             public string? assetId { get; set; }

@@ -34,6 +34,8 @@ namespace MonoGameMaker.IDE.Windows
         
         private static string _newScriptName = "Script1";
         private static string _newPrefabName = "NewObject1";
+        private static string _newPropKey = "";
+        private static string _newPropValue = "";
 
         public static void DrawPropertiesWindow()
         {
@@ -218,6 +220,11 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 {{
     public class {cleanName} : IEntityScript
     {{
+        public void Initialize(GameEntity entity, System.Collections.Generic.Dictionary<string, string> properties)
+        {{
+            // Custom initialization behavior logic
+        }}
+
         public void Update(GameTime gameTime)
         {{
             // Custom update behavior logic
@@ -336,6 +343,57 @@ namespace {GlobalState.CurrentProjectName}.Scripts
             if (ImGui.InputText("##PrefabTag", ref currentTag, 64))
             {
                 prefab.Tag = currentTag;
+            }
+
+            // Custom Properties Header
+            if (ImGui.CollapsingHeader("Custom Properties"))
+            {
+                if (prefab.CustomProperties == null) prefab.CustomProperties = new Dictionary<string, string>();
+
+                var keysToRemove = new List<string>();
+                foreach (var kv in prefab.CustomProperties)
+                {
+                    ImGui.Text(kv.Key);
+                    ImGui.SameLine(150);
+                    
+                    string val = kv.Value;
+                    ImGui.SetNextItemWidth(120);
+                    if (ImGui.InputText($"##Val_{kv.Key}_{absolutePath}", ref val, 128))
+                    {
+                        prefab.CustomProperties[kv.Key] = val;
+                    }
+                    
+                    ImGui.SameLine();
+                    if (ImGui.Button($"X##Del_{kv.Key}_{absolutePath}"))
+                    {
+                        keysToRemove.Add(kv.Key);
+                    }
+                }
+
+                foreach (var key in keysToRemove)
+                {
+                    prefab.CustomProperties.Remove(key);
+                }
+
+                ImGui.Separator();
+                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
+                ImGui.SetNextItemWidth(100);
+                ImGui.InputText($"New Key##NewKey_{absolutePath}", ref _newPropKey, 64);
+                ImGui.SameLine();
+                ImGui.SetNextItemWidth(120);
+                ImGui.InputText($"New Value##NewVal_{absolutePath}", ref _newPropValue, 128);
+                ImGui.SameLine();
+                if (ImGui.Button($"Add Property##Add_{absolutePath}"))
+                {
+                    string k = _newPropKey.Trim();
+                    if (!string.IsNullOrEmpty(k))
+                    {
+                        prefab.CustomProperties[k] = _newPropValue;
+                        _newPropKey = "";
+                        _newPropValue = "";
+                    }
+                }
             }
 
             ImGui.Dummy(new System.Numerics.Vector2(0, 10));
@@ -718,12 +776,91 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                             ImGui.SetNextItemWidth(-1);
                             ImGui.InputInt("Position Y", ref state.InstY);
 
+                            var inst = state.Scene.Instances[state.SelectedIndex];
+                            string pPath = Path.Combine(GlobalState.CurrentProjectPath!, "Prefabs", inst.prefabName + ".prefab");
+                            PrefabData basePrefab = PrefabCache.GetPrefab(pPath);
+
+                            if (ImGui.CollapsingHeader("Custom Properties Overrides"))
+                            {
+                                if (inst.CustomProperties == null) inst.CustomProperties = new Dictionary<string, string>();
+
+                                var keysToRemove = new List<string>();
+                                var baseKeys = basePrefab.CustomProperties?.Keys.ToList() ?? new List<string>();
+
+                                foreach (var kv in inst.CustomProperties)
+                                {
+                                    bool isOverride = baseKeys.Contains(kv.Key);
+                                    if (isOverride)
+                                    {
+                                        ImGui.TextColored(new System.Numerics.Vector4(1f, 1f, 0f, 1f), $"{kv.Key} (Override)");
+                                    }
+                                    else
+                                    {
+                                        ImGui.Text(kv.Key);
+                                    }
+
+                                    ImGui.SameLine(150);
+                                    string val = kv.Value;
+                                    ImGui.SetNextItemWidth(120);
+                                    if (ImGui.InputText($"##InstVal_{kv.Key}_{absolutePath}", ref val, 128))
+                                    {
+                                        inst.CustomProperties[kv.Key] = val;
+                                    }
+
+                                    ImGui.SameLine();
+                                    if (ImGui.Button($"X##InstDel_{kv.Key}_{absolutePath}"))
+                                    {
+                                        keysToRemove.Add(kv.Key);
+                                    }
+                                }
+
+                                foreach (var key in keysToRemove)
+                                {
+                                    inst.CustomProperties.Remove(key);
+                                }
+
+                                if (basePrefab.CustomProperties != null)
+                                {
+                                    foreach (var baseKv in basePrefab.CustomProperties)
+                                    {
+                                        if (!inst.CustomProperties.ContainsKey(baseKv.Key))
+                                        {
+                                            ImGui.TextColored(new System.Numerics.Vector4(0.6f, 0.6f, 0.6f, 1f), $"{baseKv.Key}: \"{baseKv.Value}\"");
+                                            ImGui.SameLine(220);
+                                            if (ImGui.Button($"Override##Ovr_{baseKv.Key}_{absolutePath}"))
+                                            {
+                                                inst.CustomProperties[baseKv.Key] = baseKv.Value;
+                                            }
+                                        }
+                                    }
+                                }
+
+                                ImGui.Separator();
+                                ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+
+                                ImGui.SetNextItemWidth(100);
+                                ImGui.InputText($"New Key##InstNewKey_{absolutePath}", ref _newPropKey, 64);
+                                ImGui.SameLine();
+                                ImGui.SetNextItemWidth(120);
+                                ImGui.InputText($"New Value##InstNewVal_{absolutePath}", ref _newPropValue, 128);
+                                ImGui.SameLine();
+                                if (ImGui.Button($"Add Override##InstAdd_{absolutePath}"))
+                                {
+                                    string k = _newPropKey.Trim();
+                                    if (!string.IsNullOrEmpty(k))
+                                    {
+                                        inst.CustomProperties[k] = _newPropValue;
+                                        _newPropKey = "";
+                                        _newPropValue = "";
+                                    }
+                                }
+                            }
+
                             float spacing = ImGui.GetStyle().ItemSpacing.X;
                             float halfWidth = (ImGui.GetContentRegionAvail().X - spacing) / 2;
 
                             if (ImGui.Button("Update Pos", new System.Numerics.Vector2(halfWidth, 30)))
                             {
-                                var inst = state.Scene.Instances[state.SelectedIndex];
                                 inst.prefabName = state.InstPrefabName;
                                 inst.x = state.InstX;
                                 inst.y = state.InstY;

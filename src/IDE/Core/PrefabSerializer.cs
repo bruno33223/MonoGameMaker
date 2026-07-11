@@ -9,6 +9,7 @@ namespace MonoGameMaker.IDE.Core
         public string TextureName { get; set; } = string.Empty;
         public string ScriptName { get; set; } = string.Empty;
         public string Tag { get; set; } = "Default";
+        public System.Collections.Generic.Dictionary<string, string> CustomProperties { get; set; } = new();
     }
 
     public static class PrefabSerializer
