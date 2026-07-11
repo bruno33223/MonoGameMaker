@@ -91,7 +91,7 @@ namespace MonoGameMaker.IDE.Core
 
                 string copyDirectives = @"
   <PropertyGroup>
-    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
     <None Update=""Content\Scenes\**\*.*"">
