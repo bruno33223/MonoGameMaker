@@ -20,7 +20,12 @@ namespace MonoGameMaker.IDE
         private bool _showOpenProjectPopup;
 
         // Simulation / Play State
-        public static bool IsPlaying { get; set; } = false;
+        public static bool IsPlaying
+        {
+            get => GlobalState.IsPlaying;
+            set => GlobalState.IsPlaying = value;
+        }
+        private bool _wasPlaying = false;
         private bool _isLayoutReady = false;
 
         // Layout States
@@ -77,8 +82,91 @@ namespace MonoGameMaker.IDE
             base.Initialize();
         }
 
+        private SceneSerializer.SceneData? GetActiveScene()
+        {
+            if (GlobalState.CurrentProjectPath == null || GlobalState.SelectedResourcePath == null) return null;
+            if (GlobalState.SelectedResourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                string absolutePath = Path.Combine(GlobalState.CurrentProjectPath, GlobalState.SelectedResourcePath);
+                return ResourceEditors.GetSceneData(absolutePath);
+            }
+            return null;
+        }
+
         protected override void Update(GameTime gameTime)
         {
+            if (GlobalState.IsPlaying && !_wasPlaying)
+            {
+                var activeScene = GetActiveScene();
+                if (activeScene != null)
+                {
+                    GlobalState.Log("Simulating Active Scene Components (Play Mode)");
+                    foreach (var inst in activeScene.Instances)
+                    {
+                        foreach (var comp in inst.Components)
+                        {
+                            if (comp.Enabled)
+                            {
+                                try
+                                {
+                                    comp.Awake();
+                                }
+                                catch (Exception ex)
+                                {
+                                    GlobalState.Log($"Error in Component Awake on {inst.prefabName}: {ex.Message}");
+                                    comp.Enabled = false;
+                                }
+                            }
+                        }
+                    }
+                    foreach (var inst in activeScene.Instances)
+                    {
+                        foreach (var comp in inst.Components)
+                        {
+                            if (comp.Enabled)
+                            {
+                                try
+                                {
+                                    comp.Start();
+                                }
+                                catch (Exception ex)
+                                {
+                                    GlobalState.Log($"Error in Component Start on {inst.prefabName}: {ex.Message}");
+                                    comp.Enabled = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _wasPlaying = GlobalState.IsPlaying;
+
+            if (GlobalState.IsPlaying)
+            {
+                var activeScene = GetActiveScene();
+                if (activeScene != null)
+                {
+                    foreach (var inst in activeScene.Instances)
+                    {
+                        foreach (var comp in inst.Components)
+                        {
+                            if (comp.Enabled)
+                            {
+                                try
+                                {
+                                    comp.Update(gameTime);
+                                }
+                                catch (Exception ex)
+                                {
+                                    GlobalState.Log($"Error in Component Update on {inst.prefabName}: {ex.Message}");
+                                    comp.Enabled = false;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             UpdateEditor(gameTime);
             base.Update(gameTime);
         }

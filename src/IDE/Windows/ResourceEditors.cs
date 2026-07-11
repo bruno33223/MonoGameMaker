@@ -32,6 +32,15 @@ namespace MonoGameMaker.IDE.Windows
         }
 
         private static readonly Dictionary<string, SceneEditorState> _sceneStates = new();
+
+        public static SceneSerializer.SceneData? GetSceneData(string absolutePath)
+        {
+            if (_sceneStates.TryGetValue(absolutePath, out var state))
+            {
+                return state.Scene;
+            }
+            return null;
+        }
         
         private static string _newScriptName = "Script1";
         private static string _newPrefabName = "NewObject1";
@@ -1109,6 +1118,29 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                         state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x, (int)inst.y, borderThickness, (int)drawH), borderCol);
                         // Right border
                         state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle((int)inst.x + (int)drawW - borderThickness, (int)inst.y, borderThickness, (int)drawH), borderCol);
+                    }
+                }
+
+                // 5. Draw simulation components if playing
+                if (GlobalState.IsPlaying)
+                {
+                    foreach (var inst in state.Scene.Instances)
+                    {
+                        foreach (var comp in inst.Components)
+                        {
+                            if (comp.Enabled)
+                            {
+                                try
+                                {
+                                    comp.Draw(state.SpriteBatch);
+                                }
+                                catch (Exception ex)
+                                {
+                                    GlobalState.Log($"Error in Component Draw on {inst.prefabName}: {ex.Message}");
+                                    comp.Enabled = false;
+                                }
+                            }
+                        }
                     }
                 }
 

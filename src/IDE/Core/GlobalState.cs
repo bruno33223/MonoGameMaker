@@ -14,6 +14,7 @@ namespace MonoGameMaker.IDE.Core
         public static string? SelectedResourcePath { get; set; }
         public static FileSystemCache? CurrentProjectCache { get; set; }
         public static HashSet<string> OpenResources { get; } = new();
+        public static bool IsPlaying { get; set; } = false;
         
         public static readonly List<string> ConsoleLogs = new();
         public static Process? RunningGameProcess { get; set; }
