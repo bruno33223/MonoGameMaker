@@ -85,6 +85,9 @@ namespace MonoGameMaker.IDE.Windows
         private static string? _lastProjectPath;
         private static Microsoft.Xna.Framework.Content.ContentManager? _simulationContentManager;
         private static SimpleServiceProvider? _simulationServices;
+        private static RenderTarget2D? _fontPreviewRenderTarget;
+        private static IntPtr _fontPreviewRenderTargetId = IntPtr.Zero;
+        private static SpriteBatch? _fontPreviewSpriteBatch;
         private static readonly string[] _commonFonts = new[]
         {
             "Arial",
@@ -636,42 +639,111 @@ namespace MonoGameMaker.IDE.Windows
             ImGui.Dummy(new System.Numerics.Vector2(0, 5));
             ImGui.Text("WYSIWYG Preview:");
 
-            ImGui.BeginChild("FontPreviewCanvas", new System.Numerics.Vector2(0, 150), ImGuiChildFlags.None, ImGuiWindowFlags.NoScrollbar);
-            
-            // ImGui-First real-time scaling
-            float baseSize = 13.0f;
-            float scaleScale = (float)_editingFontSize / baseSize;
-            if (scaleScale < 0.2f) scaleScale = 0.2f;
-            if (scaleScale > 5.0f) scaleScale = 5.0f;
-            ImGui.SetWindowFontScale(scaleScale);
+            // Calculate size and handle RenderTarget
+            int previewW = (int)ImGui.GetContentRegionAvail().X;
+            if (previewW < 100) previewW = 300;
+            int previewH = 120;
+
+            if (_fontPreviewRenderTarget == null || _fontPreviewRenderTarget.Width != previewW || _fontPreviewRenderTarget.Height != previewH)
+            {
+                if (_fontPreviewRenderTargetId != IntPtr.Zero)
+                {
+                    TextureCache.UnbindRenderTarget(_fontPreviewRenderTargetId);
+                }
+                _fontPreviewRenderTarget?.Dispose();
+                _fontPreviewRenderTarget = new RenderTarget2D(GlobalState.GraphicsDevice!, previewW, previewH);
+                _fontPreviewRenderTargetId = TextureCache.BindRenderTarget(_fontPreviewRenderTarget);
+            }
+
+            if (_fontPreviewSpriteBatch == null)
+            {
+                _fontPreviewSpriteBatch = new SpriteBatch(GlobalState.GraphicsDevice!);
+            }
+
+            // Try to load compiled font from target project's build output using simulation ContentManager
+            SpriteFont? compiledFont = null;
+            string fontName = Path.GetFileNameWithoutExtension(absolutePath);
+            try
+            {
+                var contentMgr = GetSimulationContentManager();
+                // Clear cache key if compiled
+                try
+                {
+                    var loadedAssetsField = typeof(Microsoft.Xna.Framework.Content.ContentManager).GetField("loadedAssets", BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (loadedAssetsField != null)
+                    {
+                        var loadedAssets = loadedAssetsField.GetValue(contentMgr) as System.Collections.Generic.Dictionary<string, object>;
+                        if (loadedAssets != null)
+                        {
+                            loadedAssets.Remove("Fonts/" + fontName);
+                        }
+                    }
+                }
+                catch {}
+
+                compiledFont = contentMgr.Load<SpriteFont>("Fonts/" + fontName);
+            }
+            catch
+            {
+                // Uncompiled or failed to load
+            }
 
             string sampleText = "ABCDEFGHIJKLM\nabcdefghijklm\n0123456789";
 
-            System.Numerics.Vector4 col = new System.Numerics.Vector4(1f, 1f, 1f, 1f);
-            if (_editingFontStyle == "Bold")
+            if (compiledFont != null)
             {
-                col = new System.Numerics.Vector4(1f, 0.9f, 0.4f, 1f); // bold gold
-            }
-            else if (_editingFontStyle == "Italic")
-            {
-                col = new System.Numerics.Vector4(0.4f, 1f, 1f, 1f); // italic cyan
-            }
+                // Render via MonoGame RenderTarget
+                var oldTargets = GlobalState.GraphicsDevice!.GetRenderTargets();
+                GlobalState.GraphicsDevice.SetRenderTarget(_fontPreviewRenderTarget);
+                GlobalState.GraphicsDevice.Clear(new Color(25, 25, 25));
 
-            if (_editingFontStyle == "Bold")
-            {
-                // Simulated bold offset rendering
-                var cursor = ImGui.GetCursorPos();
-                ImGui.TextColored(col, sampleText);
-                ImGui.SetCursorPos(new System.Numerics.Vector2(cursor.X + 0.5f, cursor.Y));
-                ImGui.TextColored(col, sampleText);
+                _fontPreviewSpriteBatch.Begin();
+                _fontPreviewSpriteBatch.DrawString(compiledFont, sampleText, new Vector2(10, 10), Color.White);
+                _fontPreviewSpriteBatch.End();
+
+                GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
+
+                // Show the RenderTarget texture
+                ImGui.ImageButton("FontPreviewCanvasImage", _fontPreviewRenderTargetId, new System.Numerics.Vector2(previewW, previewH));
             }
             else
             {
-                ImGui.TextColored(col, sampleText);
-            }
+                // Fallback to real-time ImGui-First preview
+                ImGui.PushStyleColor(ImGuiCol.ChildBg, new System.Numerics.Vector4(0.12f, 0.12f, 0.12f, 1.0f));
+                ImGui.BeginChild("FontPreviewCanvas", new System.Numerics.Vector2(0, previewH), ImGuiChildFlags.Borders, ImGuiWindowFlags.NoScrollbar);
+                
+                float baseSize = 13.0f;
+                float scaleScale = (float)_editingFontSize / baseSize;
+                if (scaleScale < 0.2f) scaleScale = 0.2f;
+                if (scaleScale > 5.0f) scaleScale = 5.0f;
+                ImGui.SetWindowFontScale(scaleScale);
 
-            ImGui.SetWindowFontScale(1.0f);
-            ImGui.EndChild();
+                System.Numerics.Vector4 col = new System.Numerics.Vector4(1f, 1f, 1f, 1f);
+                if (_editingFontStyle == "Bold")
+                {
+                    col = new System.Numerics.Vector4(1f, 0.9f, 0.4f, 1f);
+                }
+                else if (_editingFontStyle == "Italic")
+                {
+                    col = new System.Numerics.Vector4(0.4f, 1f, 1f, 1f);
+                }
+
+                if (_editingFontStyle == "Bold")
+                {
+                    var cursor = ImGui.GetCursorPos();
+                    ImGui.TextColored(col, sampleText);
+                    ImGui.SetCursorPos(new System.Numerics.Vector2(cursor.X + 0.5f, cursor.Y));
+                    ImGui.TextColored(col, sampleText);
+                }
+                else
+                {
+                    ImGui.TextColored(col, sampleText);
+                }
+
+                ImGui.SetWindowFontScale(1.0f);
+                ImGui.EndChild();
+                ImGui.PopStyleColor();
+            }
         }
 
         private static void DrawFileProperties(string relativePath, string absolutePath)
@@ -1473,7 +1545,12 @@ namespace MonoGameMaker.IDE.Windows
                 bool isViewportHovered = ImGui.IsItemHovered();
 
                 // Track viewport focus and local mouse coordinate translations
-                GlobalState.IsViewportFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows);
+                bool isFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows) || isViewportHovered;
+                if (ImGui.GetIO().WantCaptureKeyboard)
+                {
+                    isFocused = false;
+                }
+                GlobalState.IsViewportFocused = isFocused;
                 System.Numerics.Vector2 vpMousePos = ImGui.GetMousePos();
                 GlobalState.ViewportMousePosition = new Microsoft.Xna.Framework.Vector2(vpMousePos.X - canvasPos.X, vpMousePos.Y - canvasPos.Y);
 
