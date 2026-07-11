@@ -789,7 +789,7 @@ namespace MonoGameMaker.IDE
                 var psi = new ProcessStartInfo
                 {
                     FileName = dotnetPath,
-                    Arguments = $"build \"{csprojPath}\"",
+                    Arguments = $"build \"{csprojPath}\" -p:CopyLocalLockFileAssemblies=true",
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
