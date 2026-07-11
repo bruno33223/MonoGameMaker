@@ -351,23 +351,39 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                 if (prefab.CustomProperties == null) prefab.CustomProperties = new Dictionary<string, string>();
 
                 var keysToRemove = new List<string>();
-                foreach (var kv in prefab.CustomProperties)
+
+                if (ImGui.BeginTable($"PrefabPropsTable_{absolutePath}", 3, ImGuiTableFlags.Resizable))
                 {
-                    ImGui.Text(kv.Key);
-                    ImGui.SameLine(150);
-                    
-                    string val = kv.Value;
-                    ImGui.SetNextItemWidth(120);
-                    if (ImGui.InputText($"##Val_{kv.Key}_{absolutePath}", ref val, 128))
+                    ImGui.TableSetupColumn("Key", ImGuiTableColumnFlags.WidthStretch, 0.4f);
+                    ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 0.5f);
+                    ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 30f);
+
+                    foreach (var kv in prefab.CustomProperties)
                     {
-                        prefab.CustomProperties[kv.Key] = val;
+                        ImGui.TableNextRow();
+                        
+                        // Column 1: Key name
+                        ImGui.TableSetColumnIndex(0);
+                        ImGui.AlignTextToFramePadding();
+                        ImGui.Text(kv.Key);
+
+                        // Column 2: Value Input
+                        ImGui.TableSetColumnIndex(1);
+                        string val = kv.Value;
+                        ImGui.SetNextItemWidth(-1);
+                        if (ImGui.InputText($"##Val_{kv.Key}_{absolutePath}", ref val, 128))
+                        {
+                            prefab.CustomProperties[kv.Key] = val;
+                        }
+
+                        // Column 3: Delete action
+                        ImGui.TableSetColumnIndex(2);
+                        if (ImGui.Button($"X##Del_{kv.Key}_{absolutePath}", new System.Numerics.Vector2(-1, 0)))
+                        {
+                            keysToRemove.Add(kv.Key);
+                        }
                     }
-                    
-                    ImGui.SameLine();
-                    if (ImGui.Button($"X##Del_{kv.Key}_{absolutePath}"))
-                    {
-                        keysToRemove.Add(kv.Key);
-                    }
+                    ImGui.EndTable();
                 }
 
                 foreach (var key in keysToRemove)
@@ -787,31 +803,46 @@ namespace {GlobalState.CurrentProjectName}.Scripts
                                 var keysToRemove = new List<string>();
                                 var baseKeys = basePrefab.CustomProperties?.Keys.ToList() ?? new List<string>();
 
-                                foreach (var kv in inst.CustomProperties)
+                                if (ImGui.BeginTable($"InstPropsTable_{absolutePath}", 3, ImGuiTableFlags.Resizable))
                                 {
-                                    bool isOverride = baseKeys.Contains(kv.Key);
-                                    if (isOverride)
-                                    {
-                                        ImGui.TextColored(new System.Numerics.Vector4(1f, 1f, 0f, 1f), $"{kv.Key} (Override)");
-                                    }
-                                    else
-                                    {
-                                        ImGui.Text(kv.Key);
-                                    }
+                                    ImGui.TableSetupColumn("Key", ImGuiTableColumnFlags.WidthStretch, 0.4f);
+                                    ImGui.TableSetupColumn("Value", ImGuiTableColumnFlags.WidthStretch, 0.5f);
+                                    ImGui.TableSetupColumn("Action", ImGuiTableColumnFlags.WidthFixed, 30f);
 
-                                    ImGui.SameLine(150);
-                                    string val = kv.Value;
-                                    ImGui.SetNextItemWidth(120);
-                                    if (ImGui.InputText($"##InstVal_{kv.Key}_{absolutePath}", ref val, 128))
+                                    foreach (var kv in inst.CustomProperties)
                                     {
-                                        inst.CustomProperties[kv.Key] = val;
-                                    }
+                                        ImGui.TableNextRow();
+                                        
+                                        // Column 1: Key name with yellow override check
+                                        ImGui.TableSetColumnIndex(0);
+                                        ImGui.AlignTextToFramePadding();
+                                        bool isOverride = baseKeys.Contains(kv.Key);
+                                        if (isOverride)
+                                        {
+                                            ImGui.TextColored(new System.Numerics.Vector4(1f, 1f, 0f, 1f), $"{kv.Key} (Override)");
+                                        }
+                                        else
+                                        {
+                                            ImGui.Text(kv.Key);
+                                        }
 
-                                    ImGui.SameLine();
-                                    if (ImGui.Button($"X##InstDel_{kv.Key}_{absolutePath}"))
-                                    {
-                                        keysToRemove.Add(kv.Key);
+                                        // Column 2: Value Input
+                                        ImGui.TableSetColumnIndex(1);
+                                        string val = kv.Value;
+                                        ImGui.SetNextItemWidth(-1);
+                                        if (ImGui.InputText($"##InstVal_{kv.Key}_{absolutePath}", ref val, 128))
+                                        {
+                                            inst.CustomProperties[kv.Key] = val;
+                                        }
+
+                                        // Column 3: Delete action
+                                        ImGui.TableSetColumnIndex(2);
+                                        if (ImGui.Button($"X##InstDel_{kv.Key}_{absolutePath}", new System.Numerics.Vector2(-1, 0)))
+                                        {
+                                            keysToRemove.Add(kv.Key);
+                                        }
                                     }
+                                    ImGui.EndTable();
                                 }
 
                                 foreach (var key in keysToRemove)
@@ -821,16 +852,35 @@ namespace {GlobalState.CurrentProjectName}.Scripts
 
                                 if (basePrefab.CustomProperties != null)
                                 {
-                                    foreach (var baseKv in basePrefab.CustomProperties)
+                                    bool hasUnoverridden = basePrefab.CustomProperties.Any(bk => !inst.CustomProperties.ContainsKey(bk.Key));
+                                    if (hasUnoverridden)
                                     {
-                                        if (!inst.CustomProperties.ContainsKey(baseKv.Key))
+                                        ImGui.Dummy(new System.Numerics.Vector2(0, 5));
+                                        ImGui.TextColored(new System.Numerics.Vector4(0f, 0.8f, 0.8f, 1f), "Available Prefab Defaults:");
+                                        
+                                        if (ImGui.BeginTable($"UnoverriddenProps_{absolutePath}", 2, ImGuiTableFlags.Resizable))
                                         {
-                                            ImGui.TextColored(new System.Numerics.Vector4(0.6f, 0.6f, 0.6f, 1f), $"{baseKv.Key}: \"{baseKv.Value}\"");
-                                            ImGui.SameLine(220);
-                                            if (ImGui.Button($"Override##Ovr_{baseKv.Key}_{absolutePath}"))
+                                            ImGui.TableSetupColumn("DefaultKey", ImGuiTableColumnFlags.WidthStretch, 0.7f);
+                                            ImGui.TableSetupColumn("ActionOverride", ImGuiTableColumnFlags.WidthFixed, 80f);
+
+                                            foreach (var baseKv in basePrefab.CustomProperties)
                                             {
-                                                inst.CustomProperties[baseKv.Key] = baseKv.Value;
+                                                if (!inst.CustomProperties.ContainsKey(baseKv.Key))
+                                                {
+                                                    ImGui.TableNextRow();
+                                                    
+                                                    ImGui.TableSetColumnIndex(0);
+                                                    ImGui.AlignTextToFramePadding();
+                                                    ImGui.TextColored(new System.Numerics.Vector4(0.6f, 0.6f, 0.6f, 1f), $"{baseKv.Key}: \"{baseKv.Value}\"");
+
+                                                    ImGui.TableSetColumnIndex(1);
+                                                    if (ImGui.Button($"Override##Ovr_{baseKv.Key}_{absolutePath}", new System.Numerics.Vector2(-1, 0)))
+                                                    {
+                                                        inst.CustomProperties[baseKv.Key] = baseKv.Value;
+                                                    }
+                                                }
                                             }
+                                            ImGui.EndTable();
                                         }
                                     }
                                 }
