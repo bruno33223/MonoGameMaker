@@ -1542,7 +1542,10 @@ namespace MonoGameMaker.IDE.Windows
                 System.Numerics.Vector2 canvasSize = new System.Numerics.Vector2(desiredW, desiredH);
                 System.Numerics.Vector2 canvasPos = ImGui.GetCursorScreenPos();
                 ImGui.ImageButton($"ViewportCanvas##{absolutePath}", state.RenderTargetId, canvasSize, System.Numerics.Vector2.Zero, System.Numerics.Vector2.One);
-                bool isViewportHovered = ImGui.IsItemHovered();
+                System.Numerics.Vector2 vpMousePos = ImGui.GetMousePos();
+                bool isMouseInsideCanvas = vpMousePos.X >= canvasPos.X && vpMousePos.X <= canvasPos.X + canvasSize.X &&
+                                           vpMousePos.Y >= canvasPos.Y && vpMousePos.Y <= canvasPos.Y + canvasSize.Y;
+                bool isViewportHovered = ImGui.IsItemHovered() || (isMouseInsideCanvas && ImGui.IsWindowHovered(ImGuiHoveredFlags.ChildWindows));
 
                 // Track viewport focus and local mouse coordinate translations
                 bool isFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows) || isViewportHovered;
@@ -1551,14 +1554,13 @@ namespace MonoGameMaker.IDE.Windows
                     isFocused = false;
                 }
                 GlobalState.IsViewportFocused = isFocused;
-                System.Numerics.Vector2 vpMousePos = ImGui.GetMousePos();
                 GlobalState.ViewportMousePosition = new Microsoft.Xna.Framework.Vector2(vpMousePos.X - canvasPos.X, vpMousePos.Y - canvasPos.Y);
 
                 // 5. Draw simulation UI (Screen Space) if playing, wrapped in a child containment window
                 if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
                 {
                     ImGui.SetNextWindowPos(canvasPos);
-                    ImGui.BeginChild("GameRuntimeViewportZone", canvasSize, ImGuiChildFlags.None, ImGuiWindowFlags.NoBackground | ImGuiWindowFlags.NoNavFocus);
+                    ImGui.BeginChild("GameRuntimeViewportZone", canvasSize, ImGuiChildFlags.None, ImGuiWindowFlags.NoBackground);
 
                     try
                     {
