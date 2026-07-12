@@ -1546,7 +1546,7 @@ namespace MonoGameMaker.IDE.Windows
 
                 // Track viewport focus and local mouse coordinate translations
                 bool isFocused = ImGui.IsWindowFocused(ImGuiFocusedFlags.ChildWindows) || isViewportHovered;
-                if (ImGui.GetIO().WantCaptureKeyboard)
+                if (ImGui.GetIO().WantTextInput)
                 {
                     isFocused = false;
                 }
