@@ -1,11 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
-    <ProjectReference Include="..\IDE\IDE.csproj" />
+    <ProjectReference Include="..\Runtime\Runtime.csproj" />
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ImGuiColorTextEditNet" Version="0.1.9" />
+    <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
   </ItemGroup>
 
   <PropertyGroup>
