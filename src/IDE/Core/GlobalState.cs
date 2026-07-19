@@ -12,7 +12,17 @@ namespace MonoGameMaker.IDE.Core
         public static Texture2D? PixelTexture { get; set; }
         public static string? CurrentProjectPath { get; set; }
         public static string? CurrentProjectName { get; set; }
-        public static string? SelectedResourcePath { get; set; }
+        
+        public static SelectionContext SelectionContext { get; } = new SelectionContext();
+        public static CommandManager CommandManager { get; } = new CommandManager();
+
+        [Obsolete("Use SelectionContext diretamente")]
+        public static string? SelectedResourcePath
+        {
+            get => SelectionContext.SelectedResourcePath;
+            set => CommandManager.ExecuteCommand(new SelectResourceCommand(SelectionContext, value));
+        }
+
         public static FileSystemCache? CurrentProjectCache { get; set; }
         public static HashSet<string> OpenResources { get; } = new();
         public enum SimState { Edit, Playing, Paused }
@@ -26,7 +36,14 @@ namespace MonoGameMaker.IDE.Core
             get => CurrentSimState != SimState.Edit;
             set => CurrentSimState = value ? SimState.Playing : SimState.Edit;
         }
-        public static SceneSerializer.EntityInstance? SelectedNode { get; set; }
+
+        [Obsolete("Use SelectionContext diretamente")]
+        public static SceneSerializer.EntityInstance? SelectedNode
+        {
+            get => SelectionContext.SelectedNode;
+            set => CommandManager.ExecuteCommand(new SelectNodeCommand(SelectionContext, value));
+        }
+
         public static List<GameEntity> SimEntities { get; } = new();
         
         public static readonly List<string> ConsoleLogs = new();

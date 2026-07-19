@@ -11,6 +11,11 @@ namespace MonoGameMaker.IDE.Windows
 {
     public static class InspectorWindow
     {
+        private static float _startDragX;
+        private static float _startDragY;
+        private static string? _activeCPKey;
+        private static string? _startCPValue;
+
         /// <summary>
         /// Call this inside an existing ImGui tab bar (after BeginTabItem check).
         /// It does NOT call Begin/End — it renders as a tab item inline.
@@ -19,14 +24,15 @@ namespace MonoGameMaker.IDE.Windows
         {
             if (!ImGui.BeginTabItem($"Inspector##{idSuffix}")) return;
 
-            if (GlobalState.SelectedNode == null)
+            var selectionContext = GlobalState.SelectionContext;
+            if (selectionContext.SelectedNode == null)
             {
                 ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f), "Click an entity in the Hierarchy or Viewport to inspect it.");
                 ImGui.EndTabItem();
                 return;
             }
 
-            var node = GlobalState.SelectedNode;
+            var node = selectionContext.SelectedNode;
             ImGui.TextColored(new System.Numerics.Vector4(0f, 0.85f, 0.85f, 1f), $"{node.prefabName}");
             ImGui.SameLine();
             ImGui.TextDisabled($"({node.x:F0}, {node.y:F0})");
@@ -44,9 +50,34 @@ namespace MonoGameMaker.IDE.Windows
                 float x = node.x;
                 float y = node.y;
                 ImGui.SetNextItemWidth(-1);
-                if (ImGui.DragFloat($"X##{idSuffix}_nx", ref x, 1f)) node.x = x;
+                if (ImGui.DragFloat($"X##{idSuffix}_nx", ref x, 1f))
+                {
+                    node.x = x;
+                }
+                if (ImGui.IsItemActivated())
+                {
+                    _startDragX = node.x;
+                }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                {
+                    var cmd = new ChangePropertyCommand(node, "x", _startDragX, node.x);
+                    GlobalState.CommandManager.ExecuteCommand(cmd);
+                }
+
                 ImGui.SetNextItemWidth(-1);
-                if (ImGui.DragFloat($"Y##{idSuffix}_ny", ref y, 1f)) node.y = y;
+                if (ImGui.DragFloat($"Y##{idSuffix}_ny", ref y, 1f))
+                {
+                    node.y = y;
+                }
+                if (ImGui.IsItemActivated())
+                {
+                    _startDragY = node.y;
+                }
+                if (ImGui.IsItemDeactivatedAfterEdit())
+                {
+                    var cmd = new ChangePropertyCommand(node, "y", _startDragY, node.y);
+                    GlobalState.CommandManager.ExecuteCommand(cmd);
+                }
             }
 
             // --- Custom Properties (key-value from JSON) ---
@@ -64,6 +95,16 @@ namespace MonoGameMaker.IDE.Windows
                         if (ImGui.InputText($"##CP_{key}_{idSuffix}", ref val, 256))
                         {
                             node.CustomProperties[key] = val;
+                        }
+                        if (ImGui.IsItemActivated())
+                        {
+                            _activeCPKey = key;
+                            _startCPValue = val;
+                        }
+                        if (ImGui.IsItemDeactivatedAfterEdit() && _activeCPKey == key)
+                        {
+                            var cmd = new ChangePropertyCommand(node, "CustomProperties", _startCPValue ?? "", node.CustomProperties[key], key);
+                            GlobalState.CommandManager.ExecuteCommand(cmd);
                         }
                     }
                 }

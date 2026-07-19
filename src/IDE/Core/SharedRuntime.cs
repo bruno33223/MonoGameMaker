@@ -6,9 +6,35 @@ using Microsoft.Xna.Framework.Graphics;
 namespace MonoGameMaker.Runtime
 {
     /// <summary>
+    /// Legacy base interface for scripts. Kept for backwards compatibility.
+    /// </summary>
+    public interface IEntityScript : IDisposable
+    {
+        /// <summary>
+        /// Initializes the script with entity context and properties.
+        /// </summary>
+        void Initialize(GameEntity entity, Dictionary<string, string> properties);
+
+        /// <summary>
+        /// Called once per frame to update behavior logic.
+        /// </summary>
+        void Update(GameTime gameTime);
+
+        /// <summary>
+        /// Called once per frame to draw custom rendering overlays.
+        /// </summary>
+        void Draw(SpriteBatch spriteBatch);
+
+        /// <summary>
+        /// Called once per frame to draw UI overlays.
+        /// </summary>
+        void DrawUI(SpriteBatch spriteBatch);
+    }
+
+    /// <summary>
     /// Base class for all runtime script behaviors. Inherit from this class to add custom entity logic.
     /// </summary>
-    public abstract class EntityBehavior
+    public abstract class EntityBehavior : IDisposable
     {
         /// <summary>
         /// Reference to the GameEntity holding this behavior.
@@ -53,6 +79,11 @@ namespace MonoGameMaker.Runtime
         /// Called dynamically when this entity collides with another entity.
         /// </summary>
         public virtual void OnCollision(GameEntity other) { }
+
+        /// <summary>
+        /// Disposes of any resources (such as event subscriptions) held by the behavior.
+        /// </summary>
+        public virtual void Dispose() { }
     }
 
     /// <summary>

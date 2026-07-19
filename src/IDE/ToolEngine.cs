@@ -105,6 +105,20 @@ namespace MonoGameMaker.IDE
         {
             _inputManager.Update();
 
+            // Handle Undo/Redo keyboard shortcut keys
+            bool ctrl = _inputManager.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.LeftControl) || _inputManager.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.RightControl);
+            if (ctrl)
+            {
+                if (_inputManager.IsKeyPressed(Microsoft.Xna.Framework.Input.Keys.Z))
+                {
+                    GlobalState.CommandManager.Undo();
+                }
+                else if (_inputManager.IsKeyPressed(Microsoft.Xna.Framework.Input.Keys.Y))
+                {
+                    GlobalState.CommandManager.Redo();
+                }
+            }
+
             if (GlobalState.IsPlaying && !_wasPlaying)
             {
                 // Auto-save transient scenes to disk before compilation/simulation
@@ -350,8 +364,15 @@ namespace MonoGameMaker.IDE
                                     mState = new Microsoft.Xna.Framework.Input.MouseState();
                                 }
 
-                                kbType.GetMethod("SetState", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, new object[] { kbState });
-                                mType.GetMethod("SetState", BindingFlags.Public | BindingFlags.Static)?.Invoke(null, new object[] { mState });
+                                var kbMethod = kbType.GetMethod("SetState", BindingFlags.Public | BindingFlags.Static);
+                                var mMethod = mType.GetMethod("SetState", BindingFlags.Public | BindingFlags.Static);
+                                kbMethod?.Invoke(null, new object[] { kbState });
+                                mMethod?.Invoke(null, new object[] { mState });
+
+                                if (kbState.IsKeyDown(Microsoft.Xna.Framework.Input.Keys.Space))
+                                {
+                                    System.IO.File.AppendAllText(@"C:\Users\f70432d\input_debug.log", $"[SpacePressed] Focus: {GlobalState.IsViewportFocused}, kbMethod found: {kbMethod != null}\n");
+                                }
                             }
                         }
                         catch (Exception ex)

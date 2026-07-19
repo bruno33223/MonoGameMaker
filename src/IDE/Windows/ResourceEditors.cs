@@ -1556,6 +1556,10 @@ namespace MonoGameMaker.IDE.Windows
                 GlobalState.IsViewportFocused = isFocused;
                 GlobalState.ViewportMousePosition = new Microsoft.Xna.Framework.Vector2(vpMousePos.X - canvasPos.X, vpMousePos.Y - canvasPos.Y);
 
+                // DEBUG OVERLAY
+                ImGui.SetCursorScreenPos(new System.Numerics.Vector2(canvasPos.X + 10, canvasPos.Y + 10));
+                ImGui.TextColored(new System.Numerics.Vector4(1, 0, 0, 1), $"IsFocused: {isFocused} | Hovered: {isViewportHovered} | WantText: {ImGui.GetIO().WantTextInput}");
+
                 // 5. Draw simulation UI (Screen Space) if playing, wrapped in a child containment window
                 if (GlobalState.IsPlaying && AssemblyReloader.LoadedAssembly != null)
                 {

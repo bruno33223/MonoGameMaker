@@ -21,6 +21,9 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`SaveSystem`** | JSON-based Save/Load persistence for GameState variables | **[SaveSystem Manual](runtime/SaveSystem.md)** |
 | **`FileManagement`** | Active hub context creations and background deletion pipeline | **[FileManagement Manual](runtime/FileManagement.md)** |
 | **`CustomFonts`** | Procedures for creating, editing, compiling, and drawing custom fonts | **[CustomFonts Manual](runtime/CustomFonts.md)** |
+| **`ScriptTeardown`** | Deterministic script disposal and memory management during hot reloading | **[ScriptTeardown Manual](runtime/ScriptTeardown.md)** |
+| **`SelectionContext`** | Segregated active selection contexts for entities and resources | **[SelectionContext Manual](runtime/SelectionContext.md)** |
+| **`CommandSystem`** | Editor command-driven state mutations and Undo/Redo history stacks | **[CommandSystem Manual](runtime/CommandSystem.md)** |
 
 ---
 

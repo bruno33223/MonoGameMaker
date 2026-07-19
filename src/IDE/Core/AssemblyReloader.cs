@@ -112,6 +112,33 @@ namespace MonoGameMaker.IDE.Core
                 // Unload old context first
                 if (_currentContext != null)
                 {
+                    if (_loadedAssembly != null)
+                    {
+                        try
+                        {
+                            Type? entityManagerType = _loadedAssembly.GetType("MonoGameMaker.Runtime.EntityManager");
+                            if (entityManagerType != null)
+                            {
+                                var purgeMethod = entityManagerType.GetMethod("PurgeAllScripts", BindingFlags.Public | BindingFlags.Static);
+                                if (purgeMethod != null)
+                                {
+                                    purgeMethod.Invoke(null, null);
+                                    logCallback("Deterministic script teardown: Purged all scripts from the old assembly.");
+                                }
+                                else
+                                {
+                                    logCallback("Warning: PurgeAllScripts method not found in LoadedAssembly's EntityManager.");
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logCallback($"Warning during PurgeAllScripts invocation: {ex.Message}");
+                        }
+                    }
+
+                    WeakReference weakContext = new WeakReference(_currentContext);
+
                     try
                     {
                         _currentContext.Unload();
@@ -120,15 +147,30 @@ namespace MonoGameMaker.IDE.Core
                     {
                         logCallback($"Warning during Assembly Load Context unload: {ex.Message}");
                     }
+
                     _currentContext = null;
                     _loadedAssembly = null;
 
-                    // Force collection of old assembly to release memory
-                    GC.Collect();
-                    GC.WaitForPendingFinalizers();
+                    for (int i = 0; i < 10; i++)
+                    {
+                        GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+                        GC.WaitForPendingFinalizers();
+                        if (!weakContext.IsAlive)
+                        {
+                            logCallback($"Collectible AssemblyLoadContext collected successfully after {i + 1} iterations.");
+                            break;
+                        }
+                    }
+
+                    if (weakContext.IsAlive)
+                    {
+                        string warnMsg = "Warning: Collectible AssemblyLoadContext could not be fully collected (memory leak detected).";
+                        logCallback(warnMsg);
+                        GlobalState.Log(warnMsg);
+                    }
                 }
 
-                _currentContext = new CollectibleAssemblyLoadContext();
+                _currentContext = new CollectibleAssemblyLoadContext(dllPath);
                 
                 // Load from memory streams to avoid file locking on target DLL
                 byte[] dllBytes = File.ReadAllBytes(dllPath);
@@ -151,13 +193,26 @@ namespace MonoGameMaker.IDE.Core
 
     public class CollectibleAssemblyLoadContext : AssemblyLoadContext
     {
-        public CollectibleAssemblyLoadContext() : base(isCollectible: true)
+        private readonly AssemblyDependencyResolver? _resolver;
+
+        public CollectibleAssemblyLoadContext(string? assemblyPath = null) : base(isCollectible: true)
         {
+            if (assemblyPath != null)
+            {
+                _resolver = new AssemblyDependencyResolver(assemblyPath);
+            }
         }
 
         protected override Assembly? Load(AssemblyName assemblyName)
         {
-            // Do not override system/IDE assemblies, resolve them normally
+            if (_resolver != null)
+            {
+                string? path = _resolver.ResolveAssemblyToPath(assemblyName);
+                if (path != null)
+                {
+                    return LoadFromAssemblyPath(path);
+                }
+            }
             return null;
         }
     }

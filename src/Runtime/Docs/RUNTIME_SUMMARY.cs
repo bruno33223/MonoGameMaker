@@ -6,6 +6,32 @@ using Microsoft.Xna.Framework.Graphics;
 namespace MonoGameMaker.Runtime
 {
     /// <summary>
+    /// Legacy base interface for scripts. Kept for backwards compatibility.
+    /// </summary>
+    public interface IEntityScript : IDisposable
+    {
+        /// <summary>
+        /// Initializes the script with entity context and properties.
+        /// </summary>
+        void Initialize(GameEntity entity, Dictionary<string, string> properties);
+
+        /// <summary>
+        /// Called once per frame to update behavior logic.
+        /// </summary>
+        void Update(GameTime gameTime);
+
+        /// <summary>
+        /// Called once per frame to draw custom rendering overlays.
+        /// </summary>
+        void Draw(SpriteBatch spriteBatch);
+
+        /// <summary>
+        /// Called once per frame to draw UI overlays.
+        /// </summary>
+        void DrawUI(SpriteBatch spriteBatch);
+    }
+
+    /// <summary>
     /// Base class for all runtime script behaviors. Inherit from this class to add custom entity logic.
     /// </summary>
     /// <example>
@@ -20,10 +46,14 @@ namespace MonoGameMaker.Runtime
     ///     {
     ///         // Update logic
     ///     }
+    ///     public override void Dispose()
+    ///     {
+    ///         // Unsubscribe global events
+    ///     }
     /// }
     /// </code>
     /// </example>
-    public abstract class EntityBehavior
+    public abstract class EntityBehavior : IDisposable
     {
         /// <summary>
         /// Reference to the GameEntity holding this behavior.
@@ -65,6 +95,11 @@ namespace MonoGameMaker.Runtime
         /// Called dynamically when this entity collides with another entity.
         /// </summary>
         public virtual void OnCollision(GameEntity other) { }
+
+        /// <summary>
+        /// Disposes of resources (such as event subscriptions) held by this behavior.
+        /// </summary>
+        public virtual void Dispose() { }
     }
 
     /// <summary>
@@ -167,6 +202,11 @@ namespace MonoGameMaker.Runtime
         /// Queries the world to find the first entity carrying a specific tag that overlaps the caller's bounding box.
         /// </summary>
         public static GameEntity GetFirstColliding(GameEntity caller, string targetTag) => null;
+
+        /// <summary>
+        /// Deterministically disposes and purges all script behaviors, clearing entity lists and static caches to prevent memory leaks during hot reload.
+        /// </summary>
+        public static void PurgeAllScripts() { }
     }
 
     /// <summary>

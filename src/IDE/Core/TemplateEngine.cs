@@ -254,7 +254,7 @@ using Microsoft.Xna.Framework.Graphics;
 
 namespace MonoGameMaker.Runtime
 {
-    public abstract class EntityBehavior
+    public abstract class EntityBehavior : IDisposable
     {
         public GameEntity Entity { get; internal set; }
         public Dictionary<string, string> Properties { get; internal set; }
@@ -265,6 +265,7 @@ namespace MonoGameMaker.Runtime
         public virtual void DrawUI(SpriteBatch spriteBatch) { DrawUI(); }
         public virtual void DrawUI() { }
         public virtual void OnCollision(GameEntity other) { }
+        public virtual void Dispose() { }
     }
 }
 ";
@@ -393,6 +394,13 @@ using Microsoft.Xna.Framework.Input;
 
 namespace MonoGameMaker.Runtime
 {
+    public interface IEntityScript : IDisposable
+    {
+        void Initialize(GameEntity entity, Dictionary<string, string> properties);
+        void Update(GameTime gameTime);
+        void Draw(SpriteBatch spriteBatch);
+        void DrawUI(SpriteBatch spriteBatch);
+    }
     public static class Keyboard
     {
         private static KeyboardState _state;
@@ -702,6 +710,92 @@ namespace MonoGameMaker.Runtime
         {
             Entities.Clear();
             _entitiesToAdd.Clear();
+        }
+
+        public static void PurgeAllScripts()
+        {
+            foreach (var entity in Entities)
+            {
+                if (entity != null)
+                {
+                    try
+                    {
+                        if (entity.Script != null)
+                        {
+                            if (entity.Script is IDisposable disposable)
+                            {
+                                disposable.Dispose();
+                            }
+                            else
+                            {
+                                var teardown = entity.Script.GetType().GetMethod(""Teardown"", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                teardown?.Invoke(entity.Script, null);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(""Error disposing script: "" + ex.Message);
+                    }
+                    entity.Script = null;
+                }
+            }
+
+            foreach (var entity in _entitiesToAdd)
+            {
+                if (entity != null)
+                {
+                    try
+                    {
+                        if (entity.Script != null)
+                        {
+                            if (entity.Script is IDisposable disposable)
+                            {
+                                disposable.Dispose();
+                            }
+                            else
+                            {
+                                var teardown = entity.Script.GetType().GetMethod(""Teardown"", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+                                teardown?.Invoke(entity.Script, null);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine(""Error disposing script: "" + ex.Message);
+                    }
+                    entity.Script = null;
+                }
+            }
+
+            Entities.Clear();
+            _entitiesToAdd.Clear();
+
+            try
+            {
+                var fields = typeof(EntityManager).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic);
+                foreach (var field in fields)
+                {
+                    if (field.FieldType == typeof(Type) || field.FieldType == typeof(System.Reflection.MethodInfo))
+                    {
+                        field.SetValue(null, null);
+                    }
+                    else if (typeof(System.Collections.IDictionary).IsAssignableFrom(field.FieldType))
+                    {
+                        var dict = field.GetValue(null) as System.Collections.IDictionary;
+                        dict?.Clear();
+                    }
+                    else if (typeof(System.Collections.IList).IsAssignableFrom(field.FieldType) && field.Name != ""Entities"" && field.Name != ""_entitiesToAdd"")
+                    {
+                        var list = field.GetValue(null) as System.Collections.IList;
+                        list?.Clear();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(""Error purging static caches: "" + ex.Message);
+            }
         }
 
         public static GameEntity Spawn(string prefabName, Vector2 position)

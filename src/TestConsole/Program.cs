@@ -387,7 +387,242 @@ namespace TestGame.Scripts
                 Environment.Exit(1);
             }
 
+            // 7. Test Hot Reload memory leak prevention and script teardown (Scenario A & B)
+            Console.WriteLine("\n[TEST 7] Testing Hot Reload memory leak prevention and script teardown...");
+            try
+            {
+                string dllPath = Path.Combine(projectDir, "bin", "Debug", "net8.0", "TestGame.dll");
+                
+                WeakReference weakAlc;
+                int instancesBeforePurge;
+                RunReloadTestStep(dllPath, out weakAlc, out instancesBeforePurge, sceneData);
+                
+                for (int i = 0; i < 10; i++)
+                {
+                    GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
+                    GC.WaitForPendingFinalizers();
+                    if (!weakAlc.IsAlive)
+                    {
+                        break;
+                    }
+                }
+
+                if (weakAlc.IsAlive)
+                {
+                    Console.WriteLine("TEST FAILED: Collectible AssemblyLoadContext was not garbage collected (memory leak detected).");
+                    Environment.Exit(1);
+                }
+                
+                Console.WriteLine("TEST PASSED: Dynamic ALC collected successfully. No memory leaks detected!");
+
+                if (sceneData.Instances.Count != instancesBeforePurge)
+                {
+                    Console.WriteLine($"TEST FAILED: Primary structures (sceneData.Instances) were corrupted. Count before: {instancesBeforePurge}, after: {sceneData.Instances.Count}.");
+                    Environment.Exit(1);
+                }
+
+                var newAlc = new CollectibleAssemblyLoadContext(dllPath);
+                var newAsm = newAlc.LoadFromAssemblyPath(dllPath);
+                var newEntityManagerType = newAsm.GetType("MonoGameMaker.Runtime.EntityManager");
+                var newGameEntityType = newAsm.GetType("MonoGameMaker.Runtime.GameEntity");
+                var newSpawnMethod = newEntityManagerType?.GetMethod("Spawn", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+                
+                if (newSpawnMethod != null && newGameEntityType != null)
+                {
+                    var paramTypes = newSpawnMethod.GetParameters();
+                    var vector2Type = paramTypes[1].ParameterType;
+                    var spawnPos = Activator.CreateInstance(vector2Type, new object[] { 100f, 100f });
+
+                    var spawned = newSpawnMethod.Invoke(null, new object[] { "mock_prefab", spawnPos });
+                    if (spawned == null)
+                    {
+                        Console.WriteLine("TEST FAILED: Spawning new entity after reload failed.");
+                        Environment.Exit(1);
+                    }
+                    Console.WriteLine("TEST PASSED: Successfully spawned new entity post-reload (Cenario B confirmed).");
+                }
+                else
+                {
+                    Console.WriteLine("TEST FAILED: Could not resolve Spawn method post-reload.");
+                    Environment.Exit(1);
+                }
+                
+                newAlc.Unload();
+                newAlc = null;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"TEST FAILED: Exception in Test 7: {ex.Message}\n{ex.StackTrace}");
+                Environment.Exit(1);
+            }
+
+            // 8. Test CommandManager Undo/Redo stack transitions (TEST 8)
+            Console.WriteLine("\n[TEST 8] Testing CommandManager Undo/Redo...");
+            try
+            {
+                var cmdManager = new MonoGameMaker.IDE.Core.CommandManager();
+                int testValue = 0;
+
+                var mockCmd1 = new MockIncrementCommand(val => testValue = val, () => testValue, 5);
+                cmdManager.ExecuteCommand(mockCmd1);
+                if (testValue != 5) throw new Exception($"Expected 5, found {testValue}");
+
+                var mockCmd2 = new MockIncrementCommand(val => testValue = val, () => testValue, 10);
+                cmdManager.ExecuteCommand(mockCmd2);
+                if (testValue != 10) throw new Exception($"Expected 10, found {testValue}");
+
+                var mockCmd3 = new MockIncrementCommand(val => testValue = val, () => testValue, 15);
+                cmdManager.ExecuteCommand(mockCmd3);
+                if (testValue != 15) throw new Exception($"Expected 15, found {testValue}");
+
+                cmdManager.Undo();
+                if (testValue != 10) throw new Exception($"Expected 10 after first Undo, found {testValue}");
+
+                cmdManager.Undo();
+                if (testValue != 5) throw new Exception($"Expected 5 after second Undo, found {testValue}");
+
+                cmdManager.Redo();
+                if (testValue != 10) throw new Exception($"Expected 10 after Redo, found {testValue}");
+
+                Console.WriteLine("TEST PASSED: CommandManager Undo/Redo sequence verified successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"TEST FAILED: Exception in Test 8: {ex.Message}\n{ex.StackTrace}");
+                Environment.Exit(1);
+            }
+
+            // 9. Test SelectionContext reactivity and events (TEST 9)
+            Console.WriteLine("\n[TEST 9] Testing SelectionContext reactivity...");
+            try
+            {
+                var selectionCtx = new MonoGameMaker.IDE.Core.SelectionContext();
+                int fireCount = 0;
+                object? lastSelectedObj = null;
+
+                selectionCtx.OnSelectionChanged += obj =>
+                {
+                    fireCount++;
+                    lastSelectedObj = obj;
+                };
+
+                var path = "Content/Textures/hero.png";
+                var cmdPath = new MonoGameMaker.IDE.Core.SelectResourceCommand(selectionCtx, path);
+                
+                cmdPath.Execute();
+                if (selectionCtx.SelectedResourcePath != path) throw new Exception($"Expected SelectedResourcePath to be {path}, found {selectionCtx.SelectedResourcePath}");
+                if (fireCount != 1) throw new Exception($"Expected fireCount to be 1, found {fireCount}");
+                if (lastSelectedObj as string != path) throw new Exception("Expected lastSelectedObj to be path string");
+
+                var mockNode = new SceneSerializer.EntityInstance { prefabName = "TestNode", x = 10, y = 20 };
+                var cmdNode = new MonoGameMaker.IDE.Core.SelectNodeCommand(selectionCtx, mockNode);
+                
+                cmdNode.Execute();
+                if (selectionCtx.SelectedNode != mockNode) throw new Exception("Expected SelectedNode to be mockNode");
+                if (fireCount != 2) throw new Exception($"Expected fireCount to be 2, found {fireCount}");
+                if (lastSelectedObj != mockNode) throw new Exception("Expected lastSelectedObj to be mockNode");
+
+                Console.WriteLine("TEST PASSED: SelectionContext selection updates and event dispatching verified successfully.");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"TEST FAILED: Exception in Test 9: {ex.Message}\n{ex.StackTrace}");
+                Environment.Exit(1);
+            }
+
             Console.WriteLine("\n=== ALL INTEGRATION TESTS PASSED SUCCESSFULLY! ===");
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static void RunReloadTestStep(string dllPath, out WeakReference weakAlc, out int instancesBeforePurge, SceneSerializer.SceneData sceneData)
+        {
+            var alc = new CollectibleAssemblyLoadContext(dllPath);
+            var loadedAsm = alc.LoadFromAssemblyPath(dllPath);
+            weakAlc = new WeakReference(alc);
+            
+            var entityManagerType = loadedAsm.GetType("MonoGameMaker.Runtime.EntityManager");
+            var gameEntityType = loadedAsm.GetType("MonoGameMaker.Runtime.GameEntity");
+            
+            if (entityManagerType == null || gameEntityType == null)
+            {
+                throw new Exception("Could not resolve EntityManager or GameEntity in dynamically loaded assembly.");
+            }
+
+            var entity = Activator.CreateInstance(gameEntityType);
+            
+            var scriptType = loadedAsm.GetType("TestGame.Scripts.LegacyPlayer");
+            if (scriptType == null)
+            {
+                var behaviorType = loadedAsm.GetType("MonoGameMaker.Runtime.EntityBehavior");
+                if (behaviorType != null)
+                {
+                    foreach (var type in loadedAsm.GetTypes())
+                    {
+                        if (behaviorType.IsAssignableFrom(type) && !type.IsAbstract)
+                        {
+                            scriptType = type;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (scriptType == null)
+            {
+                throw new Exception("Could not find any EntityBehavior script in dynamically loaded assembly.");
+            }
+
+            var scriptInst = Activator.CreateInstance(scriptType);
+            gameEntityType.GetProperty("Script")?.SetValue(entity, scriptInst);
+            scriptType.GetProperty("Entity")?.SetValue(scriptInst, entity);
+
+            var entitiesField = entityManagerType.GetField("Entities", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            var targetList = (System.Collections.IList?)entitiesField?.GetValue(null);
+            if (targetList == null)
+            {
+                throw new Exception("EntityManager.Entities field is null.");
+            }
+            targetList.Add(entity);
+            
+            if (targetList.Count != 1)
+            {
+                throw new Exception($"Expected 1 entity in EntityManager, found {targetList.Count}.");
+            }
+
+            instancesBeforePurge = sceneData.Instances.Count;
+
+            var purgeMethod = entityManagerType.GetMethod("PurgeAllScripts", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+            if (purgeMethod == null)
+            {
+                throw new Exception("PurgeAllScripts method not found in EntityManager.");
+            }
+            purgeMethod.Invoke(null, null);
+            
+            if (targetList.Count != 0)
+            {
+                throw new Exception($"EntityManager.Entities was not cleared. Count: {targetList.Count}.");
+            }
+
+            alc.Unload();
+        }
+
+        private class MockIncrementCommand : MonoGameMaker.IDE.Core.IEditorCommand
+        {
+            private readonly Action<int> _setter;
+            private readonly Func<int> _getter;
+            private readonly int _newValue;
+            private readonly int _oldValue;
+
+            public MockIncrementCommand(Action<int> setter, Func<int> getter, int newValue)
+            {
+                _setter = setter;
+                _getter = getter;
+                _newValue = newValue;
+                _oldValue = getter();
+            }
+
+            public void Execute() => _setter(_newValue);
+            public void Undo() => _setter(_oldValue);
         }
     }
 }

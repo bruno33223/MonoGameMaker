@@ -84,7 +84,7 @@ namespace MonoGameMaker.IDE.Windows
             if (!node.IsDirectory)
             {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.Leaf | ImGuiTreeNodeFlags.NoTreePushOnOpen;
-                if (GlobalState.SelectedResourcePath == relativePath)
+                if (GlobalState.SelectionContext.SelectedResourcePath == relativePath)
                 {
                     flags |= ImGuiTreeNodeFlags.Selected;
                 }
@@ -121,7 +121,7 @@ namespace MonoGameMaker.IDE.Windows
                 
                 if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 {
-                    GlobalState.SelectedResourcePath = relativePath;
+                    GlobalState.CommandManager.ExecuteCommand(new SelectResourceCommand(GlobalState.SelectionContext, relativePath));
                 }
 
                 string ext = Path.GetExtension(relativePath).ToLower();
@@ -134,7 +134,7 @@ namespace MonoGameMaker.IDE.Windows
             else
             {
                 ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags.None;
-                if (GlobalState.SelectedResourcePath == relativePath)
+                if (GlobalState.SelectionContext.SelectedResourcePath == relativePath)
                 {
                     flags |= ImGuiTreeNodeFlags.Selected;
                 }
@@ -222,7 +222,7 @@ namespace MonoGameMaker.IDE.Windows
                 
                 if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
                 {
-                    GlobalState.SelectedResourcePath = relativePath;
+                    GlobalState.CommandManager.ExecuteCommand(new SelectResourceCommand(GlobalState.SelectionContext, relativePath));
                 }
 
                 if (opened)

@@ -38,9 +38,13 @@ To make development fast and allow AI agents to test behavior changes in real ti
     *   If compilation fails, the compiler output is captured and redirected to `GlobalState.Log(output)`.
     *   The `ConsoleLogsWindow` (ImGui logs panel) displays the compiler warning and error list instantly. This enables AI coding assistants or developers to identify syntax mistakes and recover without leaving the application.
 4.  **Dynamic Assembly Load Context (ALC)**:
-    *   To allow unloading previous assembly versions and prevent memory leaks, a collectible `AssemblyLoadContext` is instantiated:
-        `_currentContext = new AssemblyLoadContext(isCollectible: true)`
-    *   Before loading, the previous context's `Unload()` method is invoked, and `GC.Collect()` with `GC.WaitForPendingFinalizers()` are forced to purge unused type instances.
+    *   To allow unloading previous assembly versions and prevent memory leaks, a collectible `CollectibleAssemblyLoadContext` (inheriting from `AssemblyLoadContext` with `isCollectible: true`) is instantiated.
+    *   Before loading, the reload process triggers a strict deterministic cleanup:
+        1. **`EntityManager.PurgeAllScripts()`** is invoked via reflection on the old assembly to dispose/teardown active scripts and clear static collections/reflection caches.
+        2. A `WeakReference` is created pointing to the active `CollectibleAssemblyLoadContext`.
+        3. `Unload()` is called on the old context, and strong references to it and the loaded assembly are removed.
+        4. A forced collection loop runs up to 10 times executing `GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced)` and `GC.WaitForPendingFinalizers()`, polling if the context is fully unloaded (`weakContext.IsAlive == false`).
+        5. If the context is still alive, a warning is logged alerting about residual leaks.
 5.  **Memory-Stream Assembly Loading (Zero-Lock)**:
     *   A typical assembly load locks the target `.dll` file, preventing subsequent compilation builds from overwriting the file.
     *   To bypass this, the file bytes are read into memory first:
@@ -120,3 +124,35 @@ To support proper play/pause simulation and protect user scripts from consuming 
 3. **Global Shadowing**:
    User scripts use `global using Keyboard` and `global using Mouse` aliases pointing to shadow classes inside `MonoGameMaker.Runtime`. This abstracts the focus-based isolation layer from script code.
 
+---
+
+## 6. Selection Context & Command Pattern (Undo/Redo)
+
+To support undo/redo capabilities and segregate monolithic state, the IDE isolates selections and property edits into distinct contexts and command objects.
+
+```mermaid
+graph TD
+    A[UI Interactions: Hierarchy/Viewport/Explorer] -->|Executes Command| B[CommandManager]
+    B -->|Pushes to Stack| C[Undo Stack]
+    B -->|Clears on New Cmd| D[Redo Stack]
+    B -->|Executes| E[SelectionContext]
+    E -->|Fires| F[OnSelectionChanged Event]
+    F -->|Updates Reactively| G[InspectorWindow / ProjectExplorer]
+```
+
+### Core Components
+
+1.  **SelectionContext**:
+    *   Manages active selected node (`SelectedNode`) and file paths (`SelectedResourcePath`).
+    *   Dispatches `OnSelectionChanged` event whenever a selection changes, enabling reactive UI updates instead of periodic polling.
+2.  **CommandManager**:
+    *   Maintains an `IEditorCommand` history stack (`_undoStack` and `_redoStack`).
+    *   `ExecuteCommand(cmd)` executes the command, pushes it to the Undo stack, and clears the Redo stack.
+3.  **IEditorCommand**:
+    *   Exposes `Execute()` and `Undo()` contracts.
+    *   **`SelectNodeCommand` & `SelectResourceCommand`**: Wraps selection state changes.
+    *   **`ChangePropertyCommand`**: Wraps mutations to entity properties (e.g. coordinates `x`, `y`, or values in `CustomProperties`).
+4.  **Obsolete wrappers on GlobalState**:
+    *   Redirects legacy code reads to `SelectionContext` and writes to `CommandManager.ExecuteCommand`, maintaining backwards compatibility (Strangler Fig Pattern).
+5.  **Keyboard Shortcuts**:
+    *   Intercepts Ctrl+Z and Ctrl+Y key-press transitions via `InputManager` to invoke `CommandManager.Undo()` and `Redo()`.
