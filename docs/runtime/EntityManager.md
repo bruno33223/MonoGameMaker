@@ -16,6 +16,8 @@ namespace MonoGameMaker.Runtime
 
         public static void Clear();
         public static GameEntity Spawn(string prefabName, Vector2 position);
+        public static GameEntity CreateEntity();
+        public static GameEntity RestoreEntity(Guid id);
         public static void Destroy(GameEntity entity);
         public static GameEntity GetFirstColliding(GameEntity caller, string targetTag);
         public static void Update(GameTime gameTime);
@@ -33,7 +35,11 @@ To prevent `InvalidOperationException` (Collection Modified) errors, `EntityMana
 
 1.  **`Spawn(prefabName, position)`**: 
     Instantiates a `GameEntity` and its script, runs its `Awake` method, and adds it to a temporary deferred queue (`_entitiesToAdd`). It does NOT append directly to the active `Entities` list.
-2.  **`Destroy(entity)`**: 
+2.  **`CreateEntity()`**:
+    Instantiates a new bare `GameEntity` with a freshly allocated `Guid` and adds it to the deferred queue (`_entitiesToAdd`), returning it.
+3.  **`RestoreEntity(Guid id)`**:
+    Instantiates a bare `GameEntity` by forcing the injection of the provided `Guid` (bypassing auto-generation) and adds it to the deferred queue (`_entitiesToAdd`), returning it. Primarily used for loading scenes and restoring state.
+4.  **`Destroy(entity)`**: 
     Sets `entity.IsDestroyed = true`. The entity continues to exist for the duration of the current update frame.
 3.  **`Update(gameTime)`**:
     - At the start of the tick, it moves all deferred spawned entities from the queue into the active `Entities` list.

@@ -114,6 +114,7 @@ namespace MonoGameMaker.IDE.Core
                 {
                     if (_loadedAssembly != null)
                     {
+                        TeardownLoadedAssembly(_loadedAssembly, logCallback);
                         try
                         {
                             Type? entityManagerType = _loadedAssembly.GetType("MonoGameMaker.Runtime.EntityManager");
@@ -139,6 +140,9 @@ namespace MonoGameMaker.IDE.Core
 
                     WeakReference weakContext = new WeakReference(_currentContext);
 
+                    // Annull old pointers before unload and collection to prevent keeping strong roots
+                    _loadedAssembly = null;
+
                     try
                     {
                         _currentContext.Unload();
@@ -149,8 +153,8 @@ namespace MonoGameMaker.IDE.Core
                     }
 
                     _currentContext = null;
-                    _loadedAssembly = null;
 
+                    // Execute aggressive garbage collection
                     for (int i = 0; i < 10; i++)
                     {
                         GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced);
@@ -187,6 +191,46 @@ namespace MonoGameMaker.IDE.Core
             {
                 logCallback($"Error during CompileAndLoad: {ex.Message}");
                 return false;
+            }
+        }
+
+        private static void TeardownLoadedAssembly(Assembly assembly, Action<string> logCallback)
+        {
+            try
+            {
+                logCallback("Executing generic assembly Teardown...");
+                
+                // Purge all static fields of delegate/event type in the assembly's types to clear potential event handler leaks
+                foreach (Type type in assembly.GetTypes())
+                {
+                    try
+                    {
+                        var fields = type.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                        foreach (var field in fields)
+                        {
+                            if (typeof(Delegate).IsAssignableFrom(field.FieldType))
+                            {
+                                try
+                                {
+                                    field.SetValue(null, null);
+                                    logCallback($"Cleared static event handler field {type.FullName}.{field.Name}");
+                                }
+                                catch (Exception ex)
+                                {
+                                    logCallback($"Warning: could not clear field {type.FullName}.{field.Name}: {ex.Message}");
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        logCallback($"Warning: could not process fields for type {type.FullName}: {ex.Message}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                logCallback($"Error during assembly teardown: {ex.Message}");
             }
         }
     }

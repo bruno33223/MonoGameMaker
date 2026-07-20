@@ -1,3 +1,4 @@
+using System;
 using MonoGameMaker.Runtime;
 
 namespace MonoGameMaker.IDE.Core
@@ -5,17 +6,17 @@ namespace MonoGameMaker.IDE.Core
     public class SelectNodeCommand : IEditorCommand
     {
         private readonly SelectionContext _context;
-        private readonly SceneSerializer.EntityInstance? _newNode;
-        private readonly SceneSerializer.EntityInstance? _oldNode;
+        private readonly Guid _newId;
+        private readonly Guid _oldId;
 
         public SelectNodeCommand(SelectionContext context, SceneSerializer.EntityInstance? newNode)
         {
             _context = context;
-            _newNode = newNode;
-            _oldNode = context.SelectedNode;
+            _newId = newNode?.Id ?? Guid.Empty;
+            _oldId = context.SelectedEntityId;
         }
 
-        public void Execute() => _context.SetSelectedNodeInternal(_newNode);
-        public void Undo() => _context.SetSelectedNodeInternal(_oldNode);
+        public void Execute() => _context.SetSelectedEntityIdInternal(_newId);
+        public void Undo() => _context.SetSelectedEntityIdInternal(_oldId);
     }
 }

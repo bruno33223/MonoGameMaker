@@ -16,6 +16,17 @@ namespace MonoGameMaker.IDE.Windows
         private static string? _activeCPKey;
         private static string? _startCPValue;
 
+        private static SceneSerializer.SceneData? GetActiveScene()
+        {
+            if (GlobalState.CurrentProjectPath == null || GlobalState.SelectedResourcePath == null) return null;
+            if (GlobalState.SelectedResourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+            {
+                string absolutePath = Path.Combine(GlobalState.CurrentProjectPath, GlobalState.SelectedResourcePath);
+                return ResourceEditors.GetSceneData(absolutePath);
+            }
+            return null;
+        }
+
         /// <summary>
         /// Call this inside an existing ImGui tab bar (after BeginTabItem check).
         /// It does NOT call Begin/End — it renders as a tab item inline.
@@ -25,14 +36,79 @@ namespace MonoGameMaker.IDE.Windows
             if (!ImGui.BeginTabItem($"Inspector##{idSuffix}")) return;
 
             var selectionContext = GlobalState.SelectionContext;
-            if (selectionContext.SelectedNode == null)
+            Guid selectedId = selectionContext.SelectedEntityId;
+            if (selectedId == Guid.Empty)
             {
                 ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f), "Click an entity in the Hierarchy or Viewport to inspect it.");
                 ImGui.EndTabItem();
                 return;
             }
 
-            var node = selectionContext.SelectedNode;
+            SceneSerializer.EntityInstance? node = null;
+
+            if (GlobalState.IsPlaying)
+            {
+                bool entityExists = false;
+                if (AssemblyReloader.LoadedAssembly != null)
+                {
+                    try
+                    {
+                        Type? entityManagerType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.EntityManager");
+                        if (entityManagerType != null)
+                        {
+                            var entitiesField = entityManagerType.GetField("Entities", BindingFlags.Public | BindingFlags.Static);
+                            if (entitiesField != null)
+                            {
+                                var list = (System.Collections.IList?)entitiesField.GetValue(null);
+                                if (list != null)
+                                {
+                                    foreach (var entity in list)
+                                    {
+                                        if (entity != null)
+                                        {
+                                            var idProp = entity.GetType().GetProperty("Id");
+                                            Guid? entId = idProp?.GetValue(entity) as Guid?;
+                                            if (entId == selectedId)
+                                            {
+                                                entityExists = true;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        GlobalState.Log($"Error verifying entity existence in play mode: {ex.Message}");
+                    }
+                }
+
+                if (!entityExists)
+                {
+                    selectionContext.SetSelectedEntityIdInternal(Guid.Empty);
+                    ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f), "Click an entity in the Hierarchy or Viewport to inspect it.");
+                    ImGui.EndTabItem();
+                    return;
+                }
+
+                var activeScene = GetActiveScene();
+                node = activeScene?.Instances.Find(i => i.Id == selectedId);
+            }
+            else
+            {
+                var activeScene = GetActiveScene();
+                node = activeScene?.Instances.Find(i => i.Id == selectedId);
+            }
+
+            if (node == null)
+            {
+                selectionContext.SetSelectedEntityIdInternal(Guid.Empty);
+                ImGui.TextColored(new System.Numerics.Vector4(0.5f, 0.5f, 0.5f, 1f), "Click an entity in the Hierarchy or Viewport to inspect it.");
+                ImGui.EndTabItem();
+                return;
+            }
             ImGui.TextColored(new System.Numerics.Vector4(0f, 0.85f, 0.85f, 1f), $"{node.prefabName}");
             ImGui.SameLine();
             ImGui.TextDisabled($"({node.x:F0}, {node.y:F0})");
@@ -148,9 +224,9 @@ namespace MonoGameMaker.IDE.Windows
                                     {
                                         if (entity != null)
                                         {
-                                            var prefabNameProp = entity.GetType().GetProperty("PrefabName");
-                                            string? pName = prefabNameProp?.GetValue(entity) as string;
-                                            if (pName == node.prefabName)
+                                            var idProp = entity.GetType().GetProperty("Id");
+                                            Guid? entId = idProp?.GetValue(entity) as Guid?;
+                                            if (entId == selectedId)
                                             {
                                                 var scriptProp = entity.GetType().GetProperty("Script");
                                                 activeScriptInstance = scriptProp?.GetValue(entity);

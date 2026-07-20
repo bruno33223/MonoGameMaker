@@ -92,6 +92,26 @@ namespace MonoGameMaker.Runtime
     public class GameEntity
     {
         /// <summary>
+        /// The unique identifier of this entity.
+        /// </summary>
+        public Guid Id { get; set; }
+
+        public GameEntity()
+        {
+            Id = Guid.NewGuid();
+        }
+
+        public GameEntity(Guid id)
+        {
+            Id = id;
+        }
+
+        public void LoadState(Guid id)
+        {
+            Id = id;
+        }
+
+        /// <summary>
         /// The name of the prefab this entity was instantiated from.
         /// </summary>
         public string PrefabName { get; set; } = string.Empty;
@@ -298,6 +318,11 @@ namespace MonoGameMaker.Runtime
     /// </summary>
     public class EntityInstance
     {
+        /// <summary>
+        /// The unique identifier of this entity instance.
+        /// </summary>
+        public Guid Id { get; set; } = Guid.NewGuid();
+
         /// <summary>
         /// Target prefab template name.
         /// </summary>

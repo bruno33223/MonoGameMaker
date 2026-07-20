@@ -40,7 +40,18 @@ namespace MonoGameMaker.IDE.Core
         [Obsolete("Use SelectionContext diretamente")]
         public static SceneSerializer.EntityInstance? SelectedNode
         {
-            get => SelectionContext.SelectedNode;
+            get
+            {
+                if (SelectionContext.SelectedEntityId == Guid.Empty) return null;
+                if (CurrentProjectPath == null || SelectedResourcePath == null) return null;
+                if (SelectedResourcePath.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
+                {
+                    string absolutePath = System.IO.Path.Combine(CurrentProjectPath, SelectedResourcePath);
+                    var activeScene = Windows.ResourceEditors.GetSceneData(absolutePath);
+                    return activeScene?.Instances.Find(i => i.Id == SelectionContext.SelectedEntityId);
+                }
+                return null;
+            }
             set => CommandManager.ExecuteCommand(new SelectNodeCommand(SelectionContext, value));
         }
 

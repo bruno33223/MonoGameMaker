@@ -248,6 +248,7 @@ namespace MonoGameMaker.IDE
                                     if (gameEntityType != null)
                                     {
                                         gameEntity = Activator.CreateInstance(gameEntityType);
+                                        gameEntityType.GetProperty("Id")?.SetValue(gameEntity, inst.Id);
                                         gameEntityType.GetProperty("PrefabName")?.SetValue(gameEntity, inst.prefabName);
                                         gameEntityType.GetProperty("Texture")?.SetValue(gameEntity, texture);
                                         gameEntityType.GetProperty("Position")?.SetValue(gameEntity, new Vector2(inst.x, inst.y));

@@ -5,18 +5,18 @@ namespace MonoGameMaker.IDE.Core
 {
     public class SelectionContext
     {
-        private SceneSerializer.EntityInstance? _selectedNode;
+        private Guid _selectedEntityId = Guid.Empty;
         private string? _selectedResourcePath;
 
         public event Action<object?>? OnSelectionChanged;
 
-        public SceneSerializer.EntityInstance? SelectedNode => _selectedNode;
+        public Guid SelectedEntityId => _selectedEntityId;
         public string? SelectedResourcePath => _selectedResourcePath;
 
-        public void SetSelectedNodeInternal(SceneSerializer.EntityInstance? node)
+        public void SetSelectedEntityIdInternal(Guid id)
         {
-            _selectedNode = node;
-            OnSelectionChanged?.Invoke(node);
+            _selectedEntityId = id;
+            OnSelectionChanged?.Invoke(id == Guid.Empty ? null : (object)id);
         }
 
         public void SetSelectedResourcePathInternal(string? path)

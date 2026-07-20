@@ -12,14 +12,14 @@ namespace MonoGameMaker.IDE.Core
         // Event fired when selection changes
         public event Action<object?>? OnSelectionChanged;
 
-        // Current selected entity node
-        public SceneSerializer.EntityInstance? SelectedNode { get; }
+        // Current selected entity's primary key (Guid)
+        public Guid SelectedEntityId { get; }
 
         // Current selected resource path relative to project folder
         public string? SelectedResourcePath { get; }
 
-        // Internally update selected entity node (usually invoked from SelectNodeCommand)
-        public void SetSelectedNodeInternal(SceneSerializer.EntityInstance? node);
+        // Internally update selected entity Guid (usually invoked from SelectNodeCommand)
+        public void SetSelectedEntityIdInternal(Guid id);
 
         // Internally update selected resource path (usually invoked from SelectResourceCommand)
         public void SetSelectedResourcePathInternal(string? path);
@@ -59,9 +59,9 @@ namespace MonoGameMaker.IDE.Windows
 
         private void HandleSelectionChanged(object? newSelection)
         {
-            if (newSelection is SceneSerializer.EntityInstance entity)
+            if (newSelection is Guid entityId)
             {
-                _statusText = $"Inspecting Entity Prefab: {entity.prefabName}";
+                _statusText = $"Inspecting Entity ID: {entityId}";
             }
             else if (newSelection is string resourcePath)
             {
@@ -78,9 +78,9 @@ namespace MonoGameMaker.IDE.Windows
             ImGui.Begin("Selection Inspector");
             ImGui.TextColored(new System.Numerics.Vector4(0.1f, 0.8f, 0.8f, 1f), _statusText);
             
-            if (_context.SelectedNode != null)
+            if (_context.SelectedEntityId != Guid.Empty)
             {
-                ImGui.BulletText($"Position: ({_context.SelectedNode.x}, {_context.SelectedNode.y})");
+                ImGui.BulletText($"Selected Entity ID: {_context.SelectedEntityId}");
             }
             ImGui.End();
         }

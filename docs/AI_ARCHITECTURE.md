@@ -42,7 +42,7 @@ To make development fast and allow AI agents to test behavior changes in real ti
     *   Before loading, the reload process triggers a strict deterministic cleanup:
         1. **`EntityManager.PurgeAllScripts()`** is invoked via reflection on the old assembly to dispose/teardown active scripts and clear static collections/reflection caches.
         2. A `WeakReference` is created pointing to the active `CollectibleAssemblyLoadContext`.
-        3. `Unload()` is called on the old context, and strong references to it and the loaded assembly are removed.
+        3. The loaded assembly reference is cleared (`_loadedAssembly = null`), `Unload()` is called on the old context, and the load context reference itself is cleared (`_currentContext = null`).
         4. A forced collection loop runs up to 10 times executing `GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced)` and `GC.WaitForPendingFinalizers()`, polling if the context is fully unloaded (`weakContext.IsAlive == false`).
         5. If the context is still alive, a warning is logged alerting about residual leaks.
 5.  **Memory-Stream Assembly Loading (Zero-Lock)**:
@@ -143,16 +143,33 @@ graph TD
 ### Core Components
 
 1.  **SelectionContext**:
-    *   Manages active selected node (`SelectedNode`) and file paths (`SelectedResourcePath`).
+    *   Manages active selected entity Guid (`SelectedEntityId`) and file paths (`SelectedResourcePath`).
+    *   By storing only the entity's Guid, the SelectionContext decouples the IDE layer from direct object references of the dynamically loaded Runtime assembly, preventing memory leaks during assembly unloading.
     *   Dispatches `OnSelectionChanged` event whenever a selection changes, enabling reactive UI updates instead of periodic polling.
 2.  **CommandManager**:
     *   Maintains an `IEditorCommand` history stack (`_undoStack` and `_redoStack`).
-    *   `ExecuteCommand(cmd)` executes the command, pushes it to the Undo stack, and clears the Redo stack.
 3.  **IEditorCommand**:
     *   Exposes `Execute()` and `Undo()` contracts.
     *   **`SelectNodeCommand` & `SelectResourceCommand`**: Wraps selection state changes.
     *   **`ChangePropertyCommand`**: Wraps mutations to entity properties (e.g. coordinates `x`, `y`, or values in `CustomProperties`).
 4.  **Obsolete wrappers on GlobalState**:
-    *   Redirects legacy code reads to `SelectionContext` and writes to `CommandManager.ExecuteCommand`, maintaining backwards compatibility (Strangler Fig Pattern).
+    *   Redirects legacy code reads to `SelectionContext` (resolving the EntityInstance dynamically from the active scene by Guid) and writes to `CommandManager.ExecuteCommand`, maintaining backwards compatibility (Strangler Fig Pattern).
 5.  **Keyboard Shortcuts**:
     *   Intercepts Ctrl+Z and Ctrl+Y key-press transitions via `InputManager` to invoke `CommandManager.Undo()` and `Redo()`.
+
+---
+
+## 7. Deterministic State Hydration & GUID Persistence
+
+To prevent referential integrity loss during scene loads and runtime hot reloading, the ecosystem implements deterministic GUID synchronization between disk representations and live engine memory.
+
+### Serialization Data Flow
+
+1. **Persistent State Storage**:
+   Scene configurations serialize entity layouts, including their unique identifiers (`Id` of type `Guid`), to `scene_init.json`.
+2. **JSON Loading (IDE & standalone)**:
+   The `SceneSerializer.cs` reads the file. If an `"Id"` property exists, it parses it to preserve the exact same GUID. If it does not exist (backward compatibility), a new GUID is generated.
+3. **Reflective Viewport Hydration**:
+   During simulation start in the editor, the IDE resolves the loaded assembly's `MonoGameMaker.Runtime.GameEntity` type via reflection, instantiates it, and sets its `Id` property to the parsed disk ID.
+4. **Runtime Scene Instantiation**:
+   The scaffolded `SceneLoader.cs` initializes entities by mapping their `EntityInstance.Id` directly to the `GameEntity.Id` via the parameterized constructors/hydration methods, rather than generating a fresh random Guid in the default constructor.

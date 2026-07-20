@@ -9,6 +9,7 @@ namespace MonoGameMaker.IDE.Core
     {
         public class EntityInstance
         {
+            public Guid Id { get; set; } = Guid.NewGuid();
             public string prefabName { get; set; } = string.Empty;
             public float x { get; set; }
             public float y { get; set; }
@@ -154,6 +155,12 @@ namespace MonoGameMaker.IDE.Core
                 {
                     switch (prop.Name.ToLower())
                     {
+                        case "id":
+                            if (Guid.TryParse(prop.Value.GetString(), out Guid parsedId))
+                            {
+                                inst.Id = parsedId;
+                            }
+                            break;
                         case "prefabname":
                             inst.prefabName = prop.Value.GetString() ?? string.Empty;
                             break;

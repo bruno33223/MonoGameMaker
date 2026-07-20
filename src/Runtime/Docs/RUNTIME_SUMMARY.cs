@@ -109,6 +109,28 @@ namespace MonoGameMaker.Runtime
     public class GameEntity
     {
         /// <summary>
+        /// The unique identifier of this entity.
+        /// </summary>
+        public Guid Id { get; set; }
+
+        /// <summary>
+        /// Initializes a new instance of the GameEntity class with a newly generated Guid.
+        /// </summary>
+        public GameEntity() { }
+
+        /// <summary>
+        /// Initializes a new instance of the GameEntity class with a specific pre-existing Guid.
+        /// </summary>
+        /// <param name="id">The pre-existing Guid to assign to this entity.</param>
+        public GameEntity(Guid id) { }
+
+        /// <summary>
+        /// Injects or updates the entity's Guid.
+        /// </summary>
+        /// <param name="id">The Guid to hydrate the entity with.</param>
+        public void LoadState(Guid id) { }
+
+        /// <summary>
         /// The name of the prefab this entity was instantiated from.
         /// </summary>
         public string PrefabName { get; set; }
@@ -193,6 +215,16 @@ namespace MonoGameMaker.Runtime
         /// </code>
         /// </example>
         public static GameEntity Spawn(string prefabName, Vector2 position) => null;
+
+        /// <summary>
+        /// Instantiates a new bare GameEntity with a freshly allocated Guid.
+        /// </summary>
+        public static GameEntity CreateEntity() => null;
+
+        /// <summary>
+        /// Instantiates a bare GameEntity by forcing the injection of the provided Guid.
+        /// </summary>
+        public static GameEntity RestoreEntity(Guid id) => null;
 
         /// <summary>
         /// Queues the specified entity for immediate destruction at the end of the frame.

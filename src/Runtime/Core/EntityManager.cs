@@ -18,6 +18,20 @@ namespace MonoGameMaker.Runtime.Core
             }
         }
 
+        public GameEntity CreateEntity()
+        {
+            var entity = new GameEntity();
+            AddEntity(entity);
+            return entity;
+        }
+
+        public GameEntity RestoreEntity(Guid id)
+        {
+            var entity = new GameEntity(id);
+            AddEntity(entity);
+            return entity;
+        }
+
         public void RemoveEntity(GameEntity entity)
         {
             if (entity != null)

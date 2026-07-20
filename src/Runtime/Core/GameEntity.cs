@@ -15,6 +15,16 @@ namespace MonoGameMaker.Runtime.Core
             Id = Guid.NewGuid();
         }
 
+        public GameEntity(Guid id)
+        {
+            Id = id;
+        }
+
+        public void LoadState(Guid id)
+        {
+            Id = id;
+        }
+
         public virtual void Update(GameTime gameTime)
         {
         }

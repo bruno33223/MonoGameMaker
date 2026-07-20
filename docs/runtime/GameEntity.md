@@ -11,6 +11,7 @@ namespace MonoGameMaker.Runtime
 {
     public class GameEntity
     {
+        public Guid Id { get; set; }
         public string PrefabName { get; set; }
         public Texture2D? Texture { get; set; }
         public Vector2 Position { get; set; }
@@ -21,6 +22,9 @@ namespace MonoGameMaker.Runtime
         
         public Rectangle Bounds { get; }
 
+        public GameEntity();
+        public GameEntity(Guid id);
+        public void LoadState(Guid id);
         public void PlayAnimation(int frameWidth, int frameHeight, int startFrame, int endFrame, float fps);
         public void UpdateAnimation(GameTime gameTime);
     }
@@ -29,6 +33,7 @@ namespace MonoGameMaker.Runtime
 
 ### Property Descriptions
 
+*   **`Id`** (Guid): The unique identifier of this entity. Deterministically preserved across saving, loading, and hot reloading.
 *   **`PrefabName`** (string): The identifier name matching the `.prefab` file layout definition this entity was cloned from.
 *   **`Texture`** (Texture2D): The texture asset drawn in world space.
 *   **`Position`** (Vector2): The world space coordinates of the entity. Modifying this changes its position in the game world.
@@ -44,6 +49,23 @@ namespace MonoGameMaker.Runtime
 ---
 
 ## Methods
+
+### `GameEntity` (Constructors)
+- **Signature**: `GameEntity()` / `GameEntity(Guid id)`
+- **Explanation**: The parameterless constructor initializes the entity with a fresh random `Guid.NewGuid()`. The parameterized constructor allows injecting a specific GUID (typically loaded from a scene or save file) to maintain referential integrity.
+- **Example**:
+  ```csharp
+  var randomEntity = new GameEntity(); // Generates new Guid
+  var loadedEntity = new GameEntity(new Guid("d3b07384-d113-4f56-b7cd-1b759df0ee0a")); // Uses fixed Guid
+  ```
+
+### `LoadState`
+- **Signature**: `void LoadState(Guid id)`
+- **Explanation**: Injects or updates the entity's Guid. Used to hydrate existing entities with stored identifiers during deserialization.
+- **Example**:
+  ```csharp
+  entity.LoadState(diskGuid);
+  ```
 
 ### `PlayAnimation`
 - **Signature**: `void PlayAnimation(int frameWidth, int frameHeight, int startFrame, int endFrame, float fps)`

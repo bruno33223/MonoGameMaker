@@ -151,10 +151,50 @@ namespace TestConsole
         }
 
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
+            if (args.Length > 0 && args[0] == "--run-tests")
+            {
+                RunEntityRestoreTests();
+                return;
+            }
+
             using (var game = new Program())
                 game.Run();
+        }
+
+        private static void RunEntityRestoreTests()
+        {
+            Console.WriteLine("Running EntityManager RestoreEntity tests...");
+            var em = new EntityManager();
+
+            // Test 1: CreateEntity generates different GUIDs
+            var e1 = em.CreateEntity();
+            var e2 = em.CreateEntity();
+            if (e1.Id == Guid.Empty || e2.Id == Guid.Empty || e1.Id == e2.Id)
+            {
+                throw new Exception("FAIL: CreateEntity generated duplicate or empty GUIDs");
+            }
+            Console.WriteLine($"Test 1 Pass: CreateEntity works. E1: {e1.Id}, E2: {e2.Id}");
+
+            // Test 2: RestoreEntity injects specific GUID
+            var customId = Guid.NewGuid();
+            var e3 = em.RestoreEntity(customId);
+            if (e3.Id != customId)
+            {
+                throw new Exception("FAIL: RestoreEntity did not inject the correct GUID");
+            }
+            Console.WriteLine($"Test 2 Pass: RestoreEntity injected correct GUID: {e3.Id}");
+
+            // Test 3: RestoreEntity doesn't collide with existing CreateEntity GUIDs
+            var e4 = em.CreateEntity();
+            if (e4.Id == customId)
+            {
+                throw new Exception("FAIL: Collision between CreateEntity and RestoreEntity GUID");
+            }
+            Console.WriteLine($"Test 3 Pass: No collision between CreateEntity and RestoreEntity GUIDs.");
+
+            Console.WriteLine("ALL TESTS PASSED SUCCESSFULLY!");
         }
     }
 

@@ -281,6 +281,23 @@ namespace MonoGameMaker.Runtime
 {
     public class GameEntity
     {
+        public Guid Id { get; set; }
+
+        public GameEntity()
+        {
+            Id = Guid.NewGuid();
+        }
+
+        public GameEntity(Guid id)
+        {
+            Id = id;
+        }
+
+        public void LoadState(Guid id)
+        {
+            Id = id;
+        }
+
         public string PrefabName { get; set; } = string.Empty;
         public Texture2D Texture { get; set; }
         public Vector2 Position { get; set; }
@@ -435,6 +452,7 @@ namespace MonoGameMaker.Runtime
 
     public class EntityInstance
     {
+        public Guid Id { get; set; } = Guid.NewGuid();
         public string prefabName { get; set; } = string.Empty;
         public float x { get; set; }
         public float y { get; set; }
@@ -634,16 +652,14 @@ namespace MonoGameMaker.Runtime
                                      }
                                  }
 
-                                 var gameEntity = new GameEntity
-                                 {
-                                     PrefabName = inst.prefabName,
-                                     Texture = texture,
-                                     Position = new Vector2(inst.x, inst.y),
-                                     Script = scriptInstance,
-                                     Tag = instPrefab.Tag ?? ""Default"",
-                                     HitboxOffset = new Vector2(instPrefab.HitboxOffsetX, instPrefab.HitboxOffsetY),
-                                     HitboxSize = new Vector2(instPrefab.HitboxWidth, instPrefab.HitboxHeight)
-                                 };
+                                 var gameEntity = EntityManager.RestoreEntity(inst.Id);
+                                 gameEntity.PrefabName = inst.prefabName;
+                                 gameEntity.Texture = texture;
+                                 gameEntity.Position = new Vector2(inst.x, inst.y);
+                                 gameEntity.Script = scriptInstance;
+                                 gameEntity.Tag = instPrefab.Tag ?? ""Default"";
+                                 gameEntity.HitboxOffset = new Vector2(instPrefab.HitboxOffsetX, instPrefab.HitboxOffsetY);
+                                 gameEntity.HitboxSize = new Vector2(instPrefab.HitboxWidth, instPrefab.HitboxHeight);
 
                                  if (scriptInstance != null)
                                  {
@@ -710,6 +726,20 @@ namespace MonoGameMaker.Runtime
         {
             Entities.Clear();
             _entitiesToAdd.Clear();
+        }
+
+        public static GameEntity CreateEntity()
+        {
+            var entity = new GameEntity();
+            _entitiesToAdd.Add(entity);
+            return entity;
+        }
+
+        public static GameEntity RestoreEntity(Guid id)
+        {
+            var entity = new GameEntity(id);
+            _entitiesToAdd.Add(entity);
+            return entity;
         }
 
         public static void PurgeAllScripts()
@@ -952,7 +982,13 @@ namespace MonoGameMaker.Runtime
         {
             if (_entitiesToAdd.Count > 0)
             {
-                Entities.AddRange(_entitiesToAdd);
+                foreach (var entity in _entitiesToAdd)
+                {
+                    if (entity != null && !Entities.Contains(entity))
+                    {
+                        Entities.Add(entity);
+                    }
+                }
                 _entitiesToAdd.Clear();
             }
 
