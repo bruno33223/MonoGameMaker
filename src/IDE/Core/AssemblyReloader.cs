@@ -10,6 +10,8 @@ namespace MonoGameMaker.IDE.Core
     {
         private static CollectibleAssemblyLoadContext? _currentContext;
         private static Assembly? _loadedAssembly;
+        private static readonly object _buildLock = new();
+        private static bool _isBuilding;
 
         public static Assembly? LoadedAssembly => _loadedAssembly;
 
@@ -21,10 +23,20 @@ namespace MonoGameMaker.IDE.Core
                 return false;
             }
 
-            ProjectMigrator.Shift(projectRoot, logCallback);
+            lock (_buildLock)
+            {
+                if (_isBuilding)
+                {
+                    logCallback("Build already in progress. Skipping duplicate compile request.");
+                    return false;
+                }
+                _isBuilding = true;
+            }
 
             try
             {
+                MonoGameMaker.IDE.Windows.ResourceEditors.ResetSimulationContentManager();
+                ProjectMigrator.Shift(projectRoot, logCallback);
                 // 1. Locate csproj
                 string[] csprojs = Directory.GetFiles(projectRoot, "*.csproj");
                 if (csprojs.Length == 0)
@@ -191,6 +203,13 @@ namespace MonoGameMaker.IDE.Core
             {
                 logCallback($"Error during CompileAndLoad: {ex.Message}");
                 return false;
+            }
+            finally
+            {
+                lock (_buildLock)
+                {
+                    _isBuilding = false;
+                }
             }
         }
 

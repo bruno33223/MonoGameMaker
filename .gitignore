@@ -14,3 +14,4 @@ test-outputs/
 
 # ImGui configurations
 imgui.ini
+run.bat

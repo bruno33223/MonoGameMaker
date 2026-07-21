@@ -223,20 +223,21 @@ namespace MonoGameMaker.IDE.Core
             try
             {
                 string dotnetPath = TemplateEngine.GetDotnetPath();
-                string mgcbPath = Path.Combine(projectRoot, "Content", "Content.mgcb");
-                if (!File.Exists(mgcbPath))
+                string[] csprojs = Directory.GetFiles(projectRoot, "*.csproj");
+                if (csprojs.Length == 0)
                 {
-                    logCallback("MGCB file not found, skipping compilation.");
+                    logCallback("MGCB compilation skipped: No .csproj found.");
                     return;
                 }
+                string csprojPath = csprojs[0];
 
-                logCallback("Running MGCB asset compilation in background...");
+                logCallback("Running MSBuild content compilation in background...");
 
                 var psi = new ProcessStartInfo
                 {
                     FileName = dotnetPath,
-                    Arguments = "mgcb /@:Content.mgcb",
-                    WorkingDirectory = Path.Combine(projectRoot, "Content"),
+                    Arguments = $"build \"{csprojPath}\" -t:RunContentBuilder",
+                    WorkingDirectory = projectRoot,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
@@ -247,7 +248,7 @@ namespace MonoGameMaker.IDE.Core
                 using var process = Process.Start(psi);
                 if (process == null)
                 {
-                    logCallback("Failed to start MGCB compilation process.");
+                    logCallback("Failed to start MSBuild content compilation process.");
                     return;
                 }
 
@@ -257,18 +258,18 @@ namespace MonoGameMaker.IDE.Core
 
                 if (process.ExitCode == 0)
                 {
-                    logCallback("MGCB compilation completed successfully.");
+                    logCallback("MSBuild content compilation completed successfully.");
                 }
                 else
                 {
-                    logCallback($"MGCB compilation failed with exit code {process.ExitCode}.");
-                    if (!string.IsNullOrEmpty(output)) logCallback($"MGCB output: {output}");
-                    if (!string.IsNullOrEmpty(error)) logCallback($"MGCB error: {error}");
+                    logCallback($"MSBuild content compilation failed with exit code {process.ExitCode}.");
+                    if (!string.IsNullOrEmpty(output)) logCallback($"MSBuild output: {output}");
+                    if (!string.IsNullOrEmpty(error)) logCallback($"MSBuild error: {error}");
                 }
             }
             catch (Exception ex)
             {
-                logCallback($"Error during MGCB compilation: {ex.Message}");
+                logCallback($"Error during content compilation: {ex.Message}");
             }
         }
 

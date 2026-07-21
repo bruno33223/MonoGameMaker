@@ -183,7 +183,7 @@ namespace MonoGameMaker.IDE
 
                                     // Resolve script type using Reflection over AssemblyReloader.LoadedAssembly
                                     object? scriptInstance = null;
-                                    if (!string.IsNullOrEmpty(prefabData.ScriptName))
+                                    if (!string.IsNullOrEmpty(prefabData.ScriptName) && AssemblyReloader.LoadedAssembly != null)
                                     {
                                         try
                                         {
@@ -244,18 +244,21 @@ namespace MonoGameMaker.IDE
 
                                     // Create GameEntity via reflection
                                     object? gameEntity = null;
-                                    Type? gameEntityType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.GameEntity");
-                                    if (gameEntityType != null)
+                                    if (AssemblyReloader.LoadedAssembly != null)
                                     {
-                                        gameEntity = Activator.CreateInstance(gameEntityType);
-                                        gameEntityType.GetProperty("Id")?.SetValue(gameEntity, inst.Id);
-                                        gameEntityType.GetProperty("PrefabName")?.SetValue(gameEntity, inst.prefabName);
-                                        gameEntityType.GetProperty("Texture")?.SetValue(gameEntity, texture);
-                                        gameEntityType.GetProperty("Position")?.SetValue(gameEntity, new Vector2(inst.x, inst.y));
-                                        gameEntityType.GetProperty("Script")?.SetValue(gameEntity, scriptInstance);
-                                        gameEntityType.GetProperty("Tag")?.SetValue(gameEntity, prefabData.Tag ?? "Default");
-                                        gameEntityType.GetProperty("HitboxOffset")?.SetValue(gameEntity, new Vector2(prefabData.HitboxOffsetX, prefabData.HitboxOffsetY));
-                                        gameEntityType.GetProperty("HitboxSize")?.SetValue(gameEntity, new Vector2(prefabData.HitboxWidth, prefabData.HitboxHeight));
+                                        Type? gameEntityType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.GameEntity");
+                                        if (gameEntityType != null)
+                                        {
+                                            gameEntity = Activator.CreateInstance(gameEntityType);
+                                            gameEntityType.GetProperty("Id")?.SetValue(gameEntity, inst.Id);
+                                            gameEntityType.GetProperty("PrefabName")?.SetValue(gameEntity, inst.prefabName);
+                                            gameEntityType.GetProperty("Texture")?.SetValue(gameEntity, texture);
+                                            gameEntityType.GetProperty("Position")?.SetValue(gameEntity, new Vector2(inst.x, inst.y));
+                                            gameEntityType.GetProperty("Script")?.SetValue(gameEntity, scriptInstance);
+                                            gameEntityType.GetProperty("Tag")?.SetValue(gameEntity, prefabData.Tag ?? "Default");
+                                            gameEntityType.GetProperty("HitboxOffset")?.SetValue(gameEntity, new Vector2(prefabData.HitboxOffsetX, prefabData.HitboxOffsetY));
+                                            gameEntityType.GetProperty("HitboxSize")?.SetValue(gameEntity, new Vector2(prefabData.HitboxWidth, prefabData.HitboxHeight));
+                                        }
                                     }
 
                                     // Initialize script

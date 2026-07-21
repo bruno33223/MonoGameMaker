@@ -56,15 +56,12 @@ namespace MonoGameMaker.Runtime
     /// </example>
     public abstract class EntityBehavior : IDisposable
     {
-        /// <summary>
-        /// Reference to the GameEntity holding this behavior.
-        /// </summary>
-        public GameEntity Entity { get; }
+        public GameEntity Entity { get; } = null!;
 
         /// <summary>
         /// Key-value properties initialized from the Prefab configuration.
         /// </summary>
-        public Dictionary<string, string> Properties { get; }
+        public Dictionary<string, string> Properties { get; } = null!;
 
         /// <summary>
         /// Called when the entity behavior is instantiated and initialized.
@@ -130,15 +127,12 @@ namespace MonoGameMaker.Runtime
         /// <param name="id">The Guid to hydrate the entity with.</param>
         public void LoadState(Guid id) { }
 
-        /// <summary>
-        /// The name of the prefab this entity was instantiated from.
-        /// </summary>
-        public string PrefabName { get; set; }
+        public string PrefabName { get; set; } = string.Empty;
 
         /// <summary>
         /// The active 2D Sprite Texture of this entity.
         /// </summary>
-        public Texture2D Texture { get; set; }
+        public Texture2D Texture { get; set; } = null!;
 
         /// <summary>
         /// The current position coordinate of this entity in World Space.
@@ -148,12 +142,12 @@ namespace MonoGameMaker.Runtime
         /// <summary>
         /// The active behavior script attached to this entity, if any.
         /// </summary>
-        public EntityBehavior Script { get; set; }
+        public EntityBehavior Script { get; set; } = null!;
 
         /// <summary>
         /// Tag classification category used for query lookups and collision filtering.
         /// </summary>
-        public string Tag { get; set; }
+        public string Tag { get; set; } = string.Empty;
 
         /// <summary>
         /// True if the entity is queued for deletion.
@@ -204,7 +198,7 @@ namespace MonoGameMaker.Runtime
         /// <summary>
         /// List of all active entities currently loaded in the active scene.
         /// </summary>
-        public static List<GameEntity> Entities { get; }
+        public static List<GameEntity> Entities { get; } = null!;
 
         /// <summary>
         /// Spawns a new entity instance from a prefab configuration.
@@ -214,17 +208,17 @@ namespace MonoGameMaker.Runtime
         /// var player = EntityManager.Spawn("Player", new Vector2(100, 100));
         /// </code>
         /// </example>
-        public static GameEntity Spawn(string prefabName, Vector2 position) => null;
+        public static GameEntity Spawn(string prefabName, Vector2 position) => null!;
 
         /// <summary>
         /// Instantiates a new bare GameEntity with a freshly allocated Guid.
         /// </summary>
-        public static GameEntity CreateEntity() => null;
+        public static GameEntity CreateEntity() => null!;
 
         /// <summary>
         /// Instantiates a bare GameEntity by forcing the injection of the provided Guid.
         /// </summary>
-        public static GameEntity RestoreEntity(Guid id) => null;
+        public static GameEntity RestoreEntity(Guid id) => null!;
 
         /// <summary>
         /// Queues the specified entity for immediate destruction at the end of the frame.
@@ -234,7 +228,7 @@ namespace MonoGameMaker.Runtime
         /// <summary>
         /// Queries the world to find the first entity carrying a specific tag that overlaps the caller's bounding box.
         /// </summary>
-        public static GameEntity GetFirstColliding(GameEntity caller, string targetTag) => null;
+        public static GameEntity GetFirstColliding(GameEntity caller, string targetTag) => null!;
 
         /// <summary>
         /// Deterministically disposes and purges all script behaviors, clearing entity lists and static caches to prevent memory leaks during hot reload.
@@ -250,7 +244,7 @@ namespace MonoGameMaker.Runtime
         /// <summary>
         /// Raw data dictionary storage.
         /// </summary>
-        public static Dictionary<string, object> Data { get; }
+        public static Dictionary<string, object> Data { get; } = null!;
 
         /// <summary>
         /// Sets a persistent global value.
@@ -260,7 +254,7 @@ namespace MonoGameMaker.Runtime
         /// <summary>
         /// Retrieves a persistent global value, with a type-fallback.
         /// </summary>
-        public static T Get<T>(string key) => default;
+        public static T Get<T>(string key) => default!;
 
         /// <summary>
         /// Check if the registry has a value stored under the specified key.
@@ -293,7 +287,7 @@ namespace MonoGameMaker.Runtime
         /// <summary>
         /// The filename of the currently loaded scene (without path prefix or extension).
         /// </summary>
-        public static string CurrentScene { get; }
+        public static string CurrentScene { get; } = string.Empty;
 
         /// <summary>
         /// Loads a new scene layout configuration file asynchronously.

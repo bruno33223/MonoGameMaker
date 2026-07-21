@@ -12,6 +12,7 @@ namespace MonoGameMaker.IDE.Core
         private readonly Action<string> _logCallback;
         private FileSystemWatcher? _watcher;
         private Timer? _debounceTimer;
+        private Timer? _compileDebounceTimer;
         
         private readonly object _syncObj = new();
         private FileTreeNode? _currentTree;
@@ -25,6 +26,13 @@ namespace MonoGameMaker.IDE.Core
             _debounceTimer = new Timer(150);
             _debounceTimer.AutoReset = false;
             _debounceTimer.Elapsed += (s, e) => TriggerRebuild();
+
+            // Setup compile debounce timer (300ms window)
+            _compileDebounceTimer = new Timer(300);
+            _compileDebounceTimer.AutoReset = false;
+            _compileDebounceTimer.Elapsed += (s, e) => {
+                Task.Run(() => AssemblyReloader.CompileAndLoad(GlobalState.CurrentProjectPath, GlobalState.Log));
+            };
 
             // Initialize FileSystemWatcher
             InitializeWatcher();
@@ -63,7 +71,8 @@ namespace MonoGameMaker.IDE.Core
         {
             if (e.FullPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             {
-                Task.Run(() => AssemblyReloader.CompileAndLoad(GlobalState.CurrentProjectPath, GlobalState.Log));
+                _compileDebounceTimer?.Stop();
+                _compileDebounceTimer?.Start();
             }
 
             if (_debounceTimer == null) return;
@@ -183,6 +192,12 @@ namespace MonoGameMaker.IDE.Core
             {
                 _debounceTimer.Dispose();
                 _debounceTimer = null;
+            }
+
+            if (_compileDebounceTimer != null)
+            {
+                _compileDebounceTimer.Dispose();
+                _compileDebounceTimer = null;
             }
         }
     }

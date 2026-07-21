@@ -2,6 +2,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Runtime\Runtime.csproj" />
+    <ProjectReference Include="..\IDE\IDE.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -67,8 +67,6 @@ namespace MonoGameMaker.IDE.Windows
             }
         }
         
-        private static string _newScriptName = "Script1";
-        private static string _newPrefabName = "NewObject1";
         private static string _newPropKey = "";
         private static string _newPropValue = "";
 
@@ -80,7 +78,10 @@ namespace MonoGameMaker.IDE.Windows
 
         private static string _compiledFontName = "Arial";
         private static int _compiledFontSize = 14;
+        private static float _compiledFontSpacing = 0f;
         private static string _compiledFontStyle = "Regular";
+        private static DateTime _lastFontCompileTime = DateTime.MinValue;
+        private static bool _isFontCompiling = false;
 
         private static string? _lastProjectPath;
         private static Microsoft.Xna.Framework.Content.ContentManager? _simulationContentManager;
@@ -525,6 +526,7 @@ namespace MonoGameMaker.IDE.Windows
                         var spacingMatch = System.Text.RegularExpressions.Regex.Match(xml, @"<Spacing>(.*?)</Spacing>");
                         string spacingStr = spacingMatch.Success ? spacingMatch.Groups[1].Value : "0";
                         float.TryParse(spacingStr, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out _editingFontSpacing);
+                        _compiledFontSpacing = _editingFontSpacing;
                         
                         var styleMatch = System.Text.RegularExpressions.Regex.Match(xml, @"<Style>(.*?)</Style>");
                         _editingFontStyle = styleMatch.Success ? styleMatch.Groups[1].Value : "Regular";
@@ -611,6 +613,7 @@ namespace MonoGameMaker.IDE.Windows
                             GlobalState.Log($"Successfully compiled spritefont: {Path.GetFileNameWithoutExtension(absolutePath)}");
                             _compiledFontName = _editingFontName;
                             _compiledFontSize = _editingFontSize;
+                            _compiledFontSpacing = _editingFontSpacing;
                             _compiledFontStyle = _editingFontStyle;
                         }
                     });
@@ -625,19 +628,70 @@ namespace MonoGameMaker.IDE.Windows
             
             bool isModified = (_editingFontName != _compiledFontName) || 
                               (_editingFontSize != _compiledFontSize) || 
+                              (_editingFontSpacing != _compiledFontSpacing) || 
                               (_editingFontStyle != _compiledFontStyle);
 
-            if (isModified)
+            // Real-time preview background compilation (throttled to at most once per 2 seconds, only when not already building)
+            if (isModified && !_isFontCompiling && (DateTime.Now - _lastFontCompileTime).TotalSeconds > 2.0)
             {
-                ImGui.TextColored(new System.Numerics.Vector4(1f, 0.8f, 0.2f, 1f), "⚠️ Properties modified. Click 'Save and Compile Font' to apply.");
+                _isFontCompiling = true;
+                _lastFontCompileTime = DateTime.Now;
+
+                try
+                {
+                    string xml = File.ReadAllText(absolutePath);
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<FontName>.*?</FontName>", $"<FontName>{_editingFontName}</FontName>");
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<Size>.*?</Size>", $"<Size>{_editingFontSize}</Size>");
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<Spacing>.*?</Spacing>", $"<Spacing>{_editingFontSpacing.ToString(System.Globalization.CultureInfo.InvariantCulture)}</Spacing>");
+                    xml = System.Text.RegularExpressions.Regex.Replace(xml, @"<Style>.*?</Style>", $"<Style>{_editingFontStyle}</Style>");
+                    File.WriteAllText(absolutePath, xml);
+                }
+                catch {}
+
+                string projPath = GlobalState.CurrentProjectPath!;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // Compile single asset in the background using MSBuild ContentBuilder target
+                        bool success = await AssetPipelineSynchronizer.RegisterAsset(projPath, absolutePath, "Fonts", msg => {});
+                        if (success)
+                        {
+                            _compiledFontName = _editingFontName;
+                            _compiledFontSize = _editingFontSize;
+                            _compiledFontSpacing = _editingFontSpacing;
+                            _compiledFontStyle = _editingFontStyle;
+                        }
+                    }
+                    catch {}
+                    finally
+                    {
+                        _isFontCompiling = false;
+                    }
+                });
+            }
+
+            if (_isFontCompiling)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(1f, 0.8f, 0.2f, 1f), "⏳ Compiling and updating preview in background...");
+            }
+            else if (isModified)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(1f, 0.8f, 0.2f, 1f), "⚠️ Properties modified. Compiling preview...");
             }
             else
             {
-                ImGui.TextColored(new System.Numerics.Vector4(0.2f, 0.8f, 0.4f, 1f), "✓ Font is compiled and up-to-date.");
+                ImGui.TextColored(new System.Numerics.Vector4(0.2f, 0.8f, 0.4f, 1f), "✓ Font preview is up-to-date.");
             }
 
             ImGui.Dummy(new System.Numerics.Vector2(0, 5));
             ImGui.Text("WYSIWYG Preview:");
+
+            if (GlobalState.GraphicsDevice == null)
+            {
+                ImGui.TextColored(new System.Numerics.Vector4(1f, 0.3f, 0.3f, 1f), "Graphics device is null. Cannot preview font.");
+                return;
+            }
 
             // Calculate size and handle RenderTarget
             int previewW = (int)ImGui.GetContentRegionAvail().X;
@@ -646,18 +700,34 @@ namespace MonoGameMaker.IDE.Windows
 
             if (_fontPreviewRenderTarget == null || _fontPreviewRenderTarget.Width != previewW || _fontPreviewRenderTarget.Height != previewH)
             {
-                if (_fontPreviewRenderTargetId != IntPtr.Zero)
+                try
                 {
-                    TextureCache.UnbindRenderTarget(_fontPreviewRenderTargetId);
+                    if (_fontPreviewRenderTargetId != IntPtr.Zero)
+                    {
+                        TextureCache.UnbindRenderTarget(_fontPreviewRenderTargetId);
+                    }
+                    _fontPreviewRenderTarget?.Dispose();
+                    _fontPreviewRenderTarget = new RenderTarget2D(GlobalState.GraphicsDevice, previewW, previewH);
+                    _fontPreviewRenderTargetId = TextureCache.BindRenderTarget(_fontPreviewRenderTarget);
                 }
-                _fontPreviewRenderTarget?.Dispose();
-                _fontPreviewRenderTarget = new RenderTarget2D(GlobalState.GraphicsDevice!, previewW, previewH);
-                _fontPreviewRenderTargetId = TextureCache.BindRenderTarget(_fontPreviewRenderTarget);
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Error creating font preview render target: {ex.Message}");
+                    _fontPreviewRenderTarget = null;
+                    _fontPreviewRenderTargetId = IntPtr.Zero;
+                }
             }
 
             if (_fontPreviewSpriteBatch == null)
             {
-                _fontPreviewSpriteBatch = new SpriteBatch(GlobalState.GraphicsDevice!);
+                try
+                {
+                    _fontPreviewSpriteBatch = new SpriteBatch(GlobalState.GraphicsDevice);
+                }
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Error creating font preview SpriteBatch: {ex.Message}");
+                }
             }
 
             // Try to load compiled font from target project's build output using simulation ContentManager
@@ -689,24 +759,35 @@ namespace MonoGameMaker.IDE.Windows
             }
 
             string sampleText = "ABCDEFGHIJKLM\nabcdefghijklm\n0123456789";
+            bool renderTargetSuccess = false;
 
-            if (compiledFont != null)
+            if (compiledFont != null && _fontPreviewRenderTarget != null && _fontPreviewSpriteBatch != null)
             {
-                // Render via MonoGame RenderTarget
-                var oldTargets = GlobalState.GraphicsDevice!.GetRenderTargets();
-                GlobalState.GraphicsDevice.SetRenderTarget(_fontPreviewRenderTarget);
-                GlobalState.GraphicsDevice.Clear(new Color(25, 25, 25));
+                try
+                {
+                    // Render via MonoGame RenderTarget
+                    var oldTargets = GlobalState.GraphicsDevice.GetRenderTargets();
+                    GlobalState.GraphicsDevice.SetRenderTarget(_fontPreviewRenderTarget);
+                    GlobalState.GraphicsDevice.Clear(new Color(25, 25, 25));
 
-                _fontPreviewSpriteBatch.Begin();
-                _fontPreviewSpriteBatch.DrawString(compiledFont, sampleText, new Vector2(10, 10), Color.White);
-                _fontPreviewSpriteBatch.End();
+                    _fontPreviewSpriteBatch.Begin();
+                    _fontPreviewSpriteBatch.DrawString(compiledFont, sampleText, new Vector2(10, 10), Color.White);
+                    _fontPreviewSpriteBatch.End();
 
-                GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
+                    GlobalState.GraphicsDevice.SetRenderTargets(oldTargets);
 
-                // Show the RenderTarget texture
-                ImGui.ImageButton("FontPreviewCanvasImage", _fontPreviewRenderTargetId, new System.Numerics.Vector2(previewW, previewH));
+                    // Show the RenderTarget texture
+                    ImGui.ImageButton("FontPreviewCanvasImage", _fontPreviewRenderTargetId, new System.Numerics.Vector2(previewW, previewH));
+                    renderTargetSuccess = true;
+                }
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Error rendering font preview via RenderTarget: {ex.Message}");
+                    renderTargetSuccess = false;
+                }
             }
-            else
+
+            if (!renderTargetSuccess)
             {
                 // Fallback to real-time ImGui-First preview
                 ImGui.PushStyleColor(ImGuiCol.ChildBg, new System.Numerics.Vector4(0.12f, 0.12f, 0.12f, 1.0f));
@@ -1380,7 +1461,11 @@ namespace MonoGameMaker.IDE.Windows
                         var transformProp = cameraType.GetProperty("Transform", BindingFlags.Public | BindingFlags.Static);
                         if (transformProp != null)
                         {
-                            cameraTransform = (Matrix)transformProp.GetValue(null);
+                            var transformVal = transformProp.GetValue(null);
+                            if (transformVal is Matrix matrix)
+                            {
+                                cameraTransform = matrix;
+                            }
                         }
                     }
                 }
@@ -1426,8 +1511,8 @@ namespace MonoGameMaker.IDE.Windows
                         {
                             try
                             {
-                                InitializeLoadedRuntimeSystems(GetSimulationContentManager(), state.SpriteBatch, state.FallbackTexture!);
-                                drawMethod.Invoke(null, new object[] { state.SpriteBatch, state.FallbackTexture });
+                                InitializeLoadedRuntimeSystems(GetSimulationContentManager(), state.SpriteBatch!, state.FallbackTexture!);
+                                drawMethod.Invoke(null, new object[] { state.SpriteBatch!, state.FallbackTexture! });
                             }
                             catch (Exception ex)
                             {
@@ -1450,15 +1535,19 @@ namespace MonoGameMaker.IDE.Windows
                                     var boundsProp = entity.GetType().GetProperty("Bounds");
                                     if (boundsProp != null)
                                     {
-                                        Rectangle bounds = (Rectangle)boundsProp.GetValue(entity);
-                                        // Top
-                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y, bounds.Width, thick), hitboxCol);
-                                        // Bottom
-                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y + bounds.Height - thick, bounds.Width, thick), hitboxCol);
-                                        // Left
-                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y, thick, bounds.Height), hitboxCol);
-                                        // Right
-                                        state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X + bounds.Width - thick, bounds.Y, thick, bounds.Height), hitboxCol);
+                                        var boundsVal = boundsProp.GetValue(entity);
+                                        if (boundsVal is Rectangle rect)
+                                        {
+                                            Rectangle bounds = rect;
+                                            // Top
+                                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y, bounds.Width, thick), hitboxCol);
+                                            // Bottom
+                                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y + bounds.Height - thick, bounds.Width, thick), hitboxCol);
+                                            // Left
+                                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X, bounds.Y, thick, bounds.Height), hitboxCol);
+                                            // Right
+                                            state.SpriteBatch.Draw(GlobalState.PixelTexture, new Rectangle(bounds.X + bounds.Width - thick, bounds.Y, thick, bounds.Height), hitboxCol);
+                                        }
                                     }
                                 }
                             }
@@ -1841,7 +1930,24 @@ namespace MonoGameMaker.IDE.Windows
                 }
                 _simulationContentManager = new Microsoft.Xna.Framework.Content.ContentManager(_simulationServices, contentDir);
             }
-            return _simulationContentManager;
+            return _simulationContentManager!;
+        }
+
+        public static void ResetSimulationContentManager()
+        {
+            if (_simulationContentManager != null)
+            {
+                try
+                {
+                    _simulationContentManager.Unload();
+                    _simulationContentManager.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    GlobalState.Log($"Warning while unloading simulation content manager: {ex.Message}");
+                }
+                _simulationContentManager = null;
+            }
         }
 
         private static void InitializeLoadedRuntimeSystems(Microsoft.Xna.Framework.Content.ContentManager content, SpriteBatch spriteBatch, Texture2D fallbackPixel)
@@ -1893,10 +1999,12 @@ namespace MonoGameMaker.IDE.Windows
         {
             public GraphicsDevice GraphicsDevice => GlobalState.GraphicsDevice!;
 
+#pragma warning disable 67
             public event EventHandler<EventArgs>? DeviceCreated;
             public event EventHandler<EventArgs>? DeviceDisposing;
             public event EventHandler<EventArgs>? DeviceReset;
             public event EventHandler<EventArgs>? DeviceResetting;
+#pragma warning restore 67
 
             public object? GetService(Type serviceType)
             {
