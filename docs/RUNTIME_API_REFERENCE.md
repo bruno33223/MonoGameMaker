@@ -13,6 +13,7 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`EntityManager`** | Life cycles (`Spawn`, `Destroy`) and pairwise collision trigger loop | **[EntityManager Manual](runtime/EntityManager.md)** |
 | **`GameState`** | Global persistent storage (`Set`, `Get`) and type conversion fallbacks | **[GameState Manual](runtime/GameState.md)** |
 | **`Camera2D`** | Camera translation matrix calculation (`Transform`) and boundaries clamping (`LookAt`) | **[Camera2D Manual](runtime/Camera2D.md)** |
+| **`Camera3D`** | Perspective 3D/2.5D camera, view/projection matrices, trauma screen shake, and unprojection raycasting | **[Camera3D Manual](runtime/Camera3D.md)** |
 | **`SceneManager`** | Synchronous level loading (`LoadScene`) and Content boots | **[SceneManager Manual](runtime/SceneManager.md)** |
 | **`TextRenderer`** | Static global text rendering and UI space printing | **[TextRenderer Manual](runtime/TextRenderer.md)** |
 | **`ImGuiUI`** | Immediate-mode UI layout drawing and canvas isolation | **[ImGuiUI Manual](runtime/ImGuiUI.md)** |
@@ -24,6 +25,11 @@ This directory contains the detailed documentation manuals for each core class, 
 | **`ScriptTeardown`** | Deterministic script disposal and memory management during hot reloading | **[ScriptTeardown Manual](runtime/ScriptTeardown.md)** |
 | **`SelectionContext`** | Segregated active selection contexts for entities and resources | **[SelectionContext Manual](runtime/SelectionContext.md)** |
 | **`CommandSystem`** | Editor command-driven state mutations and Undo/Redo history stacks | **[CommandSystem Manual](runtime/CommandSystem.md)** |
+| **`PbrShaders`** | Physically-Based Rendering HLSL shader with normal mapping, directional/point lights, and emissive HDR | **[PbrShaders Manual](runtime/PbrShaders.md)** |
+| **`PostProcessManager`** | High-performance RenderTarget2D pipeline, multi-pass bloom, separable Gaussian blur, and ACES Filmic tone mapping | **[PostProcessManager Manual](runtime/PostProcessManager.md)** |
+| **`PbrMaterial`** | PBR material properties container (Albedo, Normal, Emissive maps, Roughness, Metallic) with auto shader binding | **[PbrMaterial Manual](runtime/PbrMaterial.md)** |
+| **`TextureProcessor`** | Procedural texture processing (background removal, Sobel normal map generation, emissive extraction, PBR material creation) | **[TextureProcessor Manual](runtime/TextureProcessor.md)** |
+| **`ParticleSystem3D`** | Zero-GC 3D/2.5D volumetric particle emitter with kinematics, presets (explosions, sparks, shockwaves, thrusters), and 2D/3D billboard renderers | **[ParticleSystem3D Manual](runtime/ParticleSystem3D.md)** |
 
 ---
 

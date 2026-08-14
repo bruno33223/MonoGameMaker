@@ -173,3 +173,73 @@ To prevent referential integrity loss during scene loads and runtime hot reloadi
    During simulation start in the editor, the IDE resolves the loaded assembly's `MonoGameMaker.Runtime.GameEntity` type via reflection, instantiates it, and sets its `Id` property to the parsed disk ID.
 4. **Runtime Scene Instantiation**:
    The scaffolded `SceneLoader.cs` initializes entities by mapping their `EntityInstance.Id` directly to the `GameEntity.Id` via the parameterized constructors/hydration methods, rather than generating a fresh random Guid in the default constructor.
+
+---
+
+## 8. Rendering & Post-Processing Pipeline
+
+The Mono GameMaker engine incorporates a physically-based shading model and multi-pass post-processing pipeline for 2.5D and 3D scenes.
+
+```mermaid
+graph LR
+    A[Geometry / Sprites with PbrSurface.fx] -->|BeginCapture| B[SceneTarget - Depth Buffer]
+    B -->|EndCapture| C[PostProcessManager]
+    C -->|Bright Pass & Gaussian Mip Chain| D[Bloom Combined Buffer]
+    B & D -->|ACES Filmic Tone Mapping| E[CompositeTarget]
+    E -->|DrawToScreen| F[Viewport / Display]
+```
+
+### Key Subsystems:
+1. **PBR Surface Shading (`PbrSurface.fx`)**:
+   - Implements Blinn-Phong/Schlick-Fresnel specular models, metallic/roughness parameters, alpha cutout discard, and tangent-space normal mapping.
+   - Computes combined directional lighting and distance-attenuated point lights with unclamped HDR emissive contributions.
+2. **Materials & Texture Processing Pipeline (`PbrMaterial.cs` & `TextureProcessor.cs`)**:
+   - **`PbrMaterial`**: Unifies Albedo, Tangent Normal, and Emissive maps with optical properties (`Roughness`, `Metallic`, `EmissiveIntensity`, `AlphaCutoff`) and automatically maps uniforms onto HLSL effects.
+   - **`TextureProcessor`**: Runtime procedural processing providing background keying with smooth anti-aliased Hermite falloff, 3x3 Sobel luminance-to-tangent normal map generation, HSV neon emissive mask extraction, and one-liner PBR material instantiation from raw images.
+3. **Post-Processing Pipeline (`PostProcessManager.cs` & `BloomEffect.fx`)**:
+   - Manages offscreen HDR render targets (`SceneTarget`, `CompositeTarget`) and multi-tier downsampled mip chains (1/2, 1/4, 1/8).
+   - Extracts bright spots via smooth-knee thresholding and applies separable 9-tap Gaussian blurs across mip levels.
+   - Applies ACES Filmic Tone Mapping during composite pass to map high dynamic range colors gracefully to LDR backbuffers.
+   - Provides an automatic zero-crash SpriteBatch software fallback when running without compiled shader binaries.
+
+---
+
+## 9. 3D/2.5D Camera System & Screen-Space Raycasting
+
+The `Camera3D` system manages 3D perspective projection, trauma-based screen shake, and unprojection raycasting for 2.5D and 3D gameplay:
+
+```mermaid
+graph LR
+    Trauma[Trauma Input / AddTrauma] --> Decay[Quadratic Decay Shake = Trauma^2]
+    Decay --> Oscillation[Multi-Frequency Harmonic Shake]
+    Oscillation --> Effective[Effective Position & Target]
+    Effective --> ViewMatrix[ViewMatrix & ViewProjectionMatrix]
+    ScreenPos[Screen Mouse Position] --> Unproject[Viewport Unprojection & Ray Intersect]
+    Unproject --> WorldHit[3D / 2.5D World Aim Point]
+```
+
+### Key Subsystems:
+1. **Trauma Screen Shake**: Non-linear quadratic displacement ($Trauma^2$) with multi-frequency harmonic sinusoidal oscillations across camera translation (Right, Up, Forward) and rotation (Pitch, Yaw, Roll).
+2. **Raycasting & Unprojection**: Exact mathematical intersection of mouse screen rays with arbitrary 3D planes ($Z = \text{planeZ}$ or custom `Plane`), providing precise cursor aiming in 2.5D top-down and 3D scenes.
+3. **Projection Helpers**: Fast screen-space projections (`WorldToScreen2D`) for rendering HUD overlays, health bars, and indicators above world entities.
+
+---
+
+## 10. Volumetric 3D/2.5D Particle System
+
+The `ParticleSystem3D` engine delivers high-density, zero-allocation visual effects tailored for high-action gameplay:
+
+```mermaid
+graph LR
+    Emit[Particle Emitters & Presets] --> Pool[Pre-Allocated 2048 Struct Array Pool]
+    Pool --> Kinematics[Zero-GC Kinematics & Lifecycle Update]
+    Kinematics --> DualRenderer{Rendering Pipeline}
+    DualRenderer -->|SpriteBatch / 2.5D| Billboard2D[Screen-Space Perspective Projection]
+    DualRenderer -->|GPU Quad Geometry / 3D| Billboard3D[Camera-Aligned 3D Quads & DepthRead]
+```
+
+### Key Subsystems:
+1. **Zero GC Memory Guarantee**: Fixed pre-allocated `Particle3D[2048]` struct array with $O(1)$ recycling of inactive slots, pre-allocated vertex/index buffers, and GPU-cached fallback glow textures.
+2. **Out-of-the-Box Presets**: Ready-to-use parameterized generators for multi-stage explosive blasts, directional spark cones, radial shockwave rings, and spacecraft engine thrusters.
+3. **Dual Pipeline Rendering**: Fast 2D projected billboards via `SpriteBatch` and hardware-accelerated 3D camera-facing billboard quads via `DrawUserIndexedPrimitives` with depth-buffer compliance and additive/alpha blending modes.
+
