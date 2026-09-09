@@ -550,14 +550,16 @@ namespace MonoGameMaker.Runtime.Rendering
         }
 
         /// <summary>
-        /// Procedurally generates a smooth Radial Vignette overlay texture (transparent center transitioning to 0.85 black edge gradient).
+        /// Procedurally generates a smooth Radial Vignette overlay texture:
+        /// Keeps the central playfield and horizontal edges crystal clear (0-85% radius transparent)
+        /// with gentle optical lens shading only at the extreme four corners (max 35% opacity).
         /// </summary>
         /// <param name="graphicsDevice">Active MonoGame GraphicsDevice.</param>
         /// <param name="width">Texture width.</param>
         /// <param name="height">Texture height.</param>
-        /// <param name="maxEdgeDarkness">Maximum opacity at outer screen corners (default: 0.85f).</param>
+        /// <param name="maxEdgeDarkness">Maximum opacity at outer screen corners (default: 0.35f).</param>
         /// <returns>A new Texture2D containing the radial vignette gradient.</returns>
-        public static Texture2D GenerateVignetteTexture(GraphicsDevice graphicsDevice, int width, int height, float maxEdgeDarkness = 0.85f)
+        public static Texture2D GenerateVignetteTexture(GraphicsDevice graphicsDevice, int width, int height, float maxEdgeDarkness = 0.35f)
         {
             ArgumentNullException.ThrowIfNull(graphicsDevice);
             if (width <= 0) width = 1;
@@ -571,39 +573,31 @@ namespace MonoGameMaker.Runtime.Rendering
             float invCenterX = centerX > 0.001f ? 1.0f / centerX : 1.0f;
             float invCenterY = centerY > 0.001f ? 1.0f / centerY : 1.0f;
 
-            float innerRadius = 0.35f;
-            float outerRadius = 1.25f;
-            float radiusRange = outerRadius - innerRadius;
-
             for (int y = 0; y < height; y++)
             {
                 float dy = (y - centerY) * invCenterY;
-                float dy2 = dy * dy;
+                float dy2 = dy * dy * 0.85f;
                 int rowOffset = y * width;
 
                 for (int x = 0; x < width; x++)
                 {
                     float dx = (x - centerX) * invCenterX;
-                    float dist = MathF.Sqrt(dx * dx + dy2);
+                    float distSq = (dx * dx * 0.85f) + dy2;
 
                     float alphaFactor;
-                    if (dist <= innerRadius)
+                    if (distSq <= 0.75f)
                     {
                         alphaFactor = 0f;
                     }
-                    else if (dist >= outerRadius)
-                    {
-                        alphaFactor = maxEdgeDarkness;
-                    }
                     else
                     {
-                        float t = (dist - innerRadius) / radiusRange;
-                        // Smooth cubic Hermite interpolation
-                        alphaFactor = t * t * (3.0f - 2.0f * t) * maxEdgeDarkness;
+                        float t = Math.Clamp((distSq - 0.75f) / 0.65f, 0f, 1f);
+                        float smoothT = t * t * (3.0f - 2.0f * t);
+                        alphaFactor = smoothT * maxEdgeDarkness;
                     }
 
-                    int a = Math.Clamp((int)(alphaFactor * 255f + 0.5f), 0, 255);
-                    data[rowOffset + x] = new Color(0, 0, 0, a);
+                    int alphaByte = Math.Clamp((int)(alphaFactor * 255f), 0, 255);
+                    data[rowOffset + x] = new Color(0, 0, 0, alphaByte);
                 }
             }
 
