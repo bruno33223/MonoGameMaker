@@ -1978,8 +1978,8 @@ namespace MonoGameMaker.IDE.Windows
                     }
                 }
 
-                // 2. Initialize TextRenderer
-                Type? textRendererType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.TextRenderer");
+                Type? textRendererType = AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.Typography.TextRenderer")
+                    ?? AssemblyReloader.LoadedAssembly.GetType("MonoGameMaker.Runtime.TextRenderer");
                 if (textRendererType != null)
                 {
                     var initMethod = textRendererType.GetMethod("Initialize", BindingFlags.Public | BindingFlags.Static);

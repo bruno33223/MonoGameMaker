@@ -818,3 +818,724 @@ namespace MonoGameMaker.Runtime
         public void Dispose() { }
     }
 }
+
+namespace MonoGameMaker.Runtime.Pooling
+{
+    /// <summary>
+    /// Contrato estrito para objetos recicláveis em ObjectPools de alta performance com Zero-GC.
+    /// </summary>
+    public interface IPoolable
+    {
+        /// <summary>Indica se a instância está ativa no mundo do jogo.</summary>
+        bool IsActive { get; set; }
+        /// <summary>Chamado imediatamente quando o objeto é resgatado do pool.</summary>
+        void OnSpawn();
+        /// <summary>Chamado imediatamente quando o objeto é devolvido ao pool.</summary>
+        void OnDespawn();
+        /// <summary>Reseta o estado interno do objeto para repouso.</summary>
+        void Reset();
+    }
+
+    /// <summary>
+    /// Gerenciador de Object Pooling genérico, thread-safe e de zero alocações de GC para objetos IPoolable.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// var pool = new ObjectPool&lt;LaserBullet&gt;(() => new LaserBullet(), 512);
+    /// pool.PreWarm(512);
+    /// var bullet = pool.Get();
+    /// pool.Release(bullet);
+    /// </code>
+    /// </example>
+    public class ObjectPool<T> where T : class, IPoolable
+    {
+        /// <summary>Quantidade de instâncias atualmente em repouso no pool.</summary>
+        public int Count { get; }
+        public ObjectPool(Func<T>? factory = null, int initialCapacity = 64) { }
+        public void PreWarm(int count) { }
+        public T Get() => null!;
+        public T Rent() => null!;
+        public void Release(T obj) { }
+        public void Return(T obj) { }
+        public void Clear() { }
+    }
+}
+
+namespace MonoGameMaker.Runtime.Resolution
+{
+    /// <summary>
+    /// Gerenciador central de resolução virtual e escalonamento de tela (1920x1080) com Letterbox/Pillarbox.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// ResolutionManager.Update(GraphicsDevice);
+    /// Vector2 virtualAim = ResolutionManager.ScreenToVirtual(mouseClientPos);
+    /// spriteBatch.Begin(transformMatrix: ResolutionManager.ScaleMatrix);
+    /// </code>
+    /// </example>
+    public static class ResolutionManager
+    {
+        public const int VirtualWidth = 1920;
+        public const int VirtualHeight = 1080;
+        public const float VirtualAspectRatio = 1.7777778f;
+        public static int ScreenWidth { get; }
+        public static int ScreenHeight { get; }
+        public static float Scale { get; }
+        public static int OffsetX { get; }
+        public static int OffsetY { get; }
+        public static Matrix ScaleMatrix { get; }
+        public static Matrix InvertScaleMatrix { get; }
+        public static Viewport Viewport { get; }
+        public static Rectangle VirtualBounds { get; }
+        public static Rectangle LetterboxBounds { get; }
+        public static void SetResolution(int screenWidth, int screenHeight) { }
+        public static void Update(int screenWidth, int screenHeight) { }
+        public static void Update(GraphicsDevice graphicsDevice) { }
+        public static Vector2 ScreenToVirtual(Vector2 screenPoint, bool clampToVirtualBounds = false) => Vector2.Zero;
+        public static Vector2 VirtualToScreen(Vector2 virtualPoint) => Vector2.Zero;
+    }
+}
+
+namespace MonoGameMaker.Runtime.Audio
+{
+    public enum ExplosionScale { Small, Medium, Heavy }
+    public enum SoundCategory { PlayerWeapons, EnemyWeapons, Souls, Impacts, Explosions, Loops, UIAndAlerts }
+    public enum SoundType { PlayerShotLight, PlayerShotHeavy, PlayerChargeUp, PlayerChargeRelease, DashWhoosh, SpecialNova, PowerupCollect, SoulPickup, EnemyShotPlasma, EnemyShotHeavy, BossEnergyBlast, BossChargeUp, BossAttackTelegraph, StatusSlowApplied, StatusPoisonApplied, ToxisSpitBioAcid, ToxisChargeWarn, ToxisDeathExplosion, KyrosCrystalResonance, KyrosChargeWarn, KyrosShatter, TitanIndustrialBass, TitanChargeWarn, TitanDestructionSub, ChronosTachyonGlitch, ChronosPhaseWarn, ChronosWarpCollapse, ExplosionSmall, ExplosionMedium, ExplosionHeavy, ExplosionMegaChain, UiHover, UiSelect, UiBack, UiUpgradePurchased, ImpactShield, ImpactHull, CriticalHitPunch, BlackHoleDrone, ContinuousDamagePulse, EmpBlast, WaveAlert, RockHit, AcidSizzle, RamArtifactDrop }
+
+    /// <summary>
+    /// Sintetizador procedural de áudio DSP HD para efeitos de combate e UI em PCM 16-bit 44.1kHz.
+    /// </summary>
+    public class SoundSynthesizer : IDisposable
+    {
+        public const int SampleRate = 44100;
+        public SoundSynthesizer() { }
+        public void Play(SoundType type, float volume = 1f, float pitch = 0f) { }
+        public void PlayExplosion(ExplosionScale scale = ExplosionScale.Medium, float volume = 1f) { }
+        public void PlayLoop(SoundType type, object sourceKey, float volume = 1f) { }
+        public void StopLoop(object sourceKey) { }
+        public void StopAllLoops() { }
+        public void Update(float dt, double totalGameTimeSeconds = 0) { }
+        public static byte[] GenerateRawPCM(SoundType type) => Array.Empty<byte>();
+        public static byte[] ConvertFloatsToPCM16(float[] samples) => Array.Empty<byte>();
+        public void Dispose() { }
+    }
+
+    /// <summary>
+    /// Gerenciador centralizado de áudio com Voice Stealing, Throttling por Timestamp e tolerância headless.
+    /// </summary>
+    public class AudioManager
+    {
+        public static AudioManager Instance { get; } = null!;
+        public float MasterVolume { get; set; }
+        public float SfxVolume { get; set; }
+        public float MusicVolume { get; set; }
+        public bool Play(SoundType type, float volume = 1f, float pitch = 0f) => true;
+        public bool PlayExplosion(ExplosionScale scale = ExplosionScale.Medium, float volume = 1f, float pitch = 0f) => true;
+        public void PlayLoop(SoundType type, object sourceKey, float volume = 1f) { }
+        public void StopLoop(object sourceKey) { }
+        public void StopAllLoops() { }
+        public void Update(float dt, double totalGameTimeSeconds = 0) { }
+    }
+
+    /// <summary>
+    /// Decodificador puramente gerenciado NLayer de MP3 com time-stretching WSOLA e Schroeder Reverb.
+    /// </summary>
+    public static class Mp3AudioLoader
+    {
+        public static SoundEffect? LoadSoundEffect(string filePath, out float durationSeconds) { durationSeconds = 0f; return null; }
+        public static SoundEffect? LoadRoboticDialogueSoundEffect(string filePath, out float durationSeconds, float speedFactor = 1.35f) { durationSeconds = 0f; return null; }
+    }
+}
+
+namespace MonoGameMaker.Runtime.Typography
+{
+    /// <summary>
+    /// Renderizador procedural de fonte matricial 5x7 em C# puro com suporte a Latin-1 PT-BR.
+    /// </summary>
+    public class BitmapFontRenderer : IDisposable
+    {
+        public BitmapFontRenderer(Texture2D? pixel = null, SpriteFont? font = null) { }
+        public BitmapFontRenderer(GraphicsDevice graphicsDevice, SpriteFont? font = null) { }
+        public static int MeasureText(string text, int scale = 1) => 0;
+        public void DrawText(SpriteBatch sb, string text, int x, int y, Color color, int scale = 1) { }
+        public void DrawTextWrapped(SpriteBatch sb, string text, int x, int y, int maxLineWidth, Color color, int scale = 1, int lineSpacing = 13) { }
+        public bool DrawTypewriterTextWrapped(SpriteBatch sb, string text, int x, int y, int maxLineWidth, Color color, int visibleCharCount, int scale = 1, int lineSpacing = 13, bool showCursor = true, float animTimer = 0f) => true;
+        public void Dispose() { }
+    }
+
+    /// <summary>
+    /// Fachada de renderização tipográfica com fallback transparente para BitmapFontRenderer.
+    /// </summary>
+    public static class TextRenderer
+    {
+        public static void Initialize(ContentManager content, SpriteBatch spriteBatch, Texture2D? fallbackPixel = null) { }
+        public static void Draw(string text, Vector2 position, Color color) { }
+        public static void Draw(string text, Vector2 position, Color color, string fontName, int scale = 1) { }
+        public static void DrawWrapped(string text, Vector2 position, int maxLineWidth, Color color, int scale = 1, int lineSpacing = 13) { }
+        public static int MeasureText(string text, int scale = 1, string fontName = "default") => 0;
+    }
+}
+
+namespace MonoGameMaker.Runtime.Graphics3D
+{
+    /// <summary>Formato sequencial de vértice de 36 bytes com Posição, Normal, Cor e Coordenadas UV.</summary>
+    public struct VertexPositionNormalColorTexture : IVertexType
+    {
+        public Vector3 Position;
+        public Vector3 Normal;
+        public Color Color;
+        public Vector2 TextureCoordinate;
+        public VertexDeclaration VertexDeclaration => null!;
+    }
+
+    /// <summary>Malha tridimensional procedural de alta performance com buffers indexados de GPU.</summary>
+    public class Mesh3D : IDisposable
+    {
+        public VertexBuffer VertexBuffer { get; } = null!;
+        public IndexBuffer IndexBuffer { get; } = null!;
+        public int TriangleCount { get; }
+        public float BoundingRadius { get; }
+        public Mesh3D(GraphicsDevice graphicsDevice, VertexPositionNormalColorTexture[] vertices, short[] indices, float boundingRadius = 1f) { }
+        public void Draw(GraphicsDevice device, Matrix world, Matrix view, Matrix projection, Texture2D? texture = null, Color? diffuseColor = null, Color? emissiveColor = null, Vector3? lightDirection = null, Color? lightColor = null, Color? ambientColor = null, Color? rimColor = null, float? specularPower = null) { }
+        public void Dispose() { }
+    }
+
+    /// <summary>Fábrica procedural de malhas 3D para esferas, asteroides, estilhaços e naves.</summary>
+    public static class Mesh3DFactory
+    {
+        public static Mesh3D CreateSphereMesh(GraphicsDevice device, float radius = 1f, int rings = 32, int slices = 32) => null!;
+        public static Mesh3D CreateAsteroidMesh(GraphicsDevice device, float radius = 20f, int subdivisions = 2, int seed = 0) => null!;
+        public static Mesh3D CreateShardMesh(GraphicsDevice device, float size = 1f, int seed = 0) => null!;
+        public static Mesh3D CreateCubeMesh(GraphicsDevice device, float size = 1f) => null!;
+        public static Mesh3D CreatePlaneMesh(GraphicsDevice device, float width = 1f, float height = 1f) => null!;
+        public static Mesh3D CreateShieldDomeMesh(GraphicsDevice device, float radius = 1f, int rings = 24, int slices = 24) => null!;
+        public static Mesh3D CreatePlayerShipMesh(GraphicsDevice device, float scale = 1f) => null!;
+        public static Mesh3D CreateTitanBossMesh(GraphicsDevice device, float scale = 1f) => null!;
+    }
+}
+
+namespace MonoGameMaker.Runtime.Combat
+{
+    /// <summary>Objeto de contexto unificado injetado por frame no loop de combate com Zero-GC.</summary>
+    public sealed class CombatContext
+    {
+        public float DeltaTime { get; }
+        public float WorldDeltaTime { get; }
+        public float TotalGameTime { get; }
+        public bool IsTimeDilated { get; set; }
+        public Camera3D? Camera { get; set; }
+        public ParticleSystem3D? Particles { get; set; }
+        public AudioManager? Audio { get; set; }
+        public SoundSynthesizer? SoundSynth { get; set; }
+        public InputService? Input { get; set; }
+        public Vector3 PlayerPosition { get; set; }
+        public bool IsPlayerAlive { get; set; }
+        public Action? OnEmpDetonation { get; set; }
+        public Action? OnCryoDetonation { get; set; }
+        public Action<int>? OnScoreAdded { get; set; }
+        public void PrepareFrame(float dt, float worldDt, float totalTime, Vector3 playerPos, bool playerAlive) { }
+    }
+
+    /// <summary>Comportamento base para entidades hostis com vida, dano e ciclo de combate.</summary>
+    public abstract class EnemyEntityBehavior : MonoGameMaker.Runtime.Core.EntityBehavior
+    {
+        public float Health { get; set; }
+        public float MaxHealth { get; set; }
+        public float Radius { get; set; }
+        public float Damage { get; set; }
+        public int ScoreValue { get; set; }
+        public bool IsDead => Health <= 0;
+        public virtual void TakeDamage(float amount, CombatContext ctx) { }
+        public abstract void UpdateCombat(CombatContext ctx);
+        public abstract void Die(CombatContext ctx);
+    }
+
+    /// <summary>Sub-partes anatômicas modulares de chefes com transformação angular relativa.</summary>
+    public class BossModularPart : MonoGameMaker.Runtime.Core.EntityBehavior
+    {
+        public string PartId { get; set; } = "Turret";
+        public Vector2 LocalOffset { get; set; }
+        public float Health { get; set; }
+        public float MaxHealth { get; set; }
+        public float Radius { get; set; }
+        public bool IsDestroyed => Health <= 0;
+        public virtual void TakeDamage(float amount, CombatContext ctx) { }
+        public virtual void UpdatePart(CombatContext ctx, Vector2 bossPosition, float bossRotation) { }
+    }
+}
+
+namespace MonoGameMaker.Runtime.Core
+{
+    public enum GameFlowState { BootLoading, TitleScreen, ProfileSelect, MainHub, SystemMap, SectorBriefing, PlayingCombat, CombatPaused, MerchantIntermission, UpgradeDraft, RamDraft, GameOver, Victory, TutorialGlitchPrompt, DevSandbox }
+
+    /// <summary>Controlador desacoplado de fluxo de telas e ciclo de vida da aplicação.</summary>
+    public class GameFlowController
+    {
+        public static GameFlowController Instance { get; } = null!;
+        public GameFlowState CurrentState { get; }
+        public GameFlowState PreviousState { get; }
+        public float StateTime { get; }
+        public Action<GameFlowState, GameFlowState>? OnStateChanged { get; set; }
+        public void ChangeState(GameFlowState newState) { }
+        public void Update(float dt, InputService? input = null) { }
+    }
+
+    public enum MouseButton { Left, Right, Middle, XButton1, XButton2 }
+    public enum InputDeviceType { KeyboardMouse, GamePad }
+
+    /// <summary>Mapeamento dinâmico de comandos para teclado, mouse e gamepad.</summary>
+    public class ActionBinding
+    {
+        public string Name { get; } = "";
+        public List<Microsoft.Xna.Framework.Input.Keys> Keys { get; } = new();
+        public List<Microsoft.Xna.Framework.Input.Buttons> GamePadButtons { get; } = new();
+        public List<MouseButton> MouseButtons { get; } = new();
+        public ActionBinding(string name) { Name = name; }
+    }
+
+    /// <summary>Subsistema de entrada multiplataforma gerenciado sem chamadas Win32 P/Invoke.</summary>
+    public class InputService
+    {
+        public static InputService Instance { get; } = null!;
+        public Microsoft.Xna.Framework.Vector2 MoveVector { get; }
+        public Microsoft.Xna.Framework.Vector2 MouseClientPos { get; }
+        public Microsoft.Xna.Framework.Vector2 MouseVirtualPos { get; }
+        public Microsoft.Xna.Framework.Vector2 MousePosition => MouseVirtualPos;
+        public Microsoft.Xna.Framework.Vector2 MouseWorldPos { get; set; }
+        public int MouseWheelDelta { get; }
+        public InputDeviceType ActiveDevice { get; set; }
+        public Microsoft.Xna.Framework.PlayerIndex GamePadIndex { get; set; }
+        public float ThumbstickDeadZone { get; set; } = 0.15f;
+        public float MouseMovementThreshold { get; set; } = 2.0f;
+        public bool IsGamePadConnected { get; }
+
+        public void Update(Microsoft.Xna.Framework.GameTime? gameTime = null) { }
+        public void RegisterAction(string actionName, Microsoft.Xna.Framework.Input.Keys[]? keys = null, Microsoft.Xna.Framework.Input.Buttons[]? padButtons = null, MouseButton[]? mouseButtons = null) { }
+        public void BindKey(string actionName, Microsoft.Xna.Framework.Input.Keys key) { }
+        public void BindGamePadButton(string actionName, Microsoft.Xna.Framework.Input.Buttons button) { }
+        public void BindMouseButton(string actionName, MouseButton button) { }
+        public bool IsActionPressed(string actionName) => false;
+        public bool IsActionJustPressed(string actionName) => false;
+        public bool IsActionJustReleased(string actionName) => false;
+        public bool IsFirePressed() => false;
+        public bool IsFireJustPressed() => false;
+        public bool IsBoostPressed() => false;
+        public bool IsBoostJustPressed() => false;
+        public bool IsEmpPressed() => false;
+        public bool IsEmpJustPressed() => false;
+        public bool IsPausePressed() => false;
+        public bool IsPauseJustPressed() => false;
+        public bool IsConfirmPressed() => false;
+        public bool IsConfirmJustPressed() => false;
+        public bool IsCancelPressed() => false;
+        public bool IsCancelJustReleased() => false;
+        public bool IsKeyDown(Microsoft.Xna.Framework.Input.Keys key) => false;
+        public bool IsKeyJustPressed(Microsoft.Xna.Framework.Input.Keys key) => false;
+        public bool IsKeyJustReleased(Microsoft.Xna.Framework.Input.Keys key) => false;
+        public bool IsMouseButtonDown(MouseButton button) => false;
+        public bool IsMouseButtonJustPressed(MouseButton button) => false;
+        public bool IsMouseButtonJustReleased(MouseButton button) => false;
+        public bool IsGamePadButtonDown(Microsoft.Xna.Framework.Input.Buttons button) => false;
+        public bool IsGamePadButtonJustPressed(Microsoft.Xna.Framework.Input.Buttons button) => false;
+    }
+}
+
+namespace MonoGameMaker.Runtime.Spatial
+{
+    /// <summary>
+    /// Represents a 2D axis-aligned floating point bounding rectangle for world-space spatial queries.
+    /// </summary>
+    public readonly struct RectangleF : IEquatable<RectangleF>
+    {
+        public readonly float X;
+        public readonly float Y;
+        public readonly float Width;
+        public readonly float Height;
+
+        public float Left => X;
+        public float Top => Y;
+        public float Right => X + Width;
+        public float Bottom => Y + Height;
+        public Microsoft.Xna.Framework.Vector2 Min => new Microsoft.Xna.Framework.Vector2(X, Y);
+        public Microsoft.Xna.Framework.Vector2 Max => new Microsoft.Xna.Framework.Vector2(Right, Bottom);
+
+        public RectangleF(float x, float y, float width, float height) { X = x; Y = y; Width = width; Height = height; }
+        public RectangleF(Microsoft.Xna.Framework.Vector2 min, Microsoft.Xna.Framework.Vector2 max) { X = MathF.Min(min.X, max.X); Y = MathF.Min(min.Y, max.Y); Width = MathF.Abs(max.X - min.X); Height = MathF.Abs(max.Y - min.Y); }
+        public bool Contains(Microsoft.Xna.Framework.Vector2 point) => false;
+        public bool Contains(float x, float y) => false;
+        public bool Contains(RectangleF other) => false;
+        public bool Intersects(RectangleF other) => false;
+        public bool Equals(RectangleF other) => false;
+    }
+
+    /// <summary>
+    /// High-performance, Zero-GC 2D spatial partitioning based on Static Linked Arrays (CSR).
+    /// Supports rapid radius and AABB queries for 500-1000 units within L1 cache budget.
+    /// </summary>
+    public sealed class SpatialHashGrid
+    {
+        public int CellColumns { get; }
+        public int CellRows { get; }
+        public float CellSize { get; }
+        public int MaxEntities { get; }
+        public ReadOnlySpan<Microsoft.Xna.Framework.Vector2> Positions => null;
+
+        public SpatialHashGrid(int worldWidth, int worldHeight, float cellSize, int maxEntities = 2048) { }
+        public void Clear() { }
+        public void Insert(int entityId, Microsoft.Xna.Framework.Vector2 position) { }
+        public void Remove(int entityId) { }
+        public void UpdatePosition(int entityId, Microsoft.Xna.Framework.Vector2 oldPos, Microsoft.Xna.Framework.Vector2 newPos) { }
+        public int FindNeighbors(Microsoft.Xna.Framework.Vector2 center, float radius, Span<int> results, int ignoreEntityId = -1) => 0;
+        public int QueryBox(RectangleF box, Span<int> results) => 0;
+    }
+}
+
+namespace MonoGameMaker.Runtime.Pathfinding
+{
+    /// <summary>
+    /// Represents the cost and unpassable obstruction grid for pathfinding terrains in a flat byte array.
+    /// </summary>
+    public sealed class CostField
+    {
+        public const byte CostPassable = 1;
+        public const byte CostBlocked = 255;
+
+        public int Width { get; }
+        public int Height { get; }
+        public float CellSize { get; }
+        public ReadOnlySpan<byte> RawCosts => null;
+
+        public CostField(int width, int height, float cellSize) { }
+        public void SetCost(int x, int y, byte cost) { }
+        public byte GetCost(int x, int y) => 0;
+        public void WorldToCell(Microsoft.Xna.Framework.Vector2 worldPos, out int cellX, out int cellY) { cellX = 0; cellY = 0; }
+        public Microsoft.Xna.Framework.Vector2 CellToWorld(int cellX, int cellY) => Microsoft.Xna.Framework.Vector2.Zero;
+        public void Clear(byte defaultCost = CostPassable) { }
+    }
+
+    /// <summary>
+    /// Computes cumulative Dijkstra / Wavefront distance fields from a goal coordinate using a flat circular queue.
+    /// </summary>
+    public sealed class IntegrationField
+    {
+        public const ushort Unvisited = ushort.MaxValue;
+
+        public int Width { get; }
+        public int Height { get; }
+        public ReadOnlySpan<ushort> RawIntegration => null;
+
+        public IntegrationField(int width, int height) { }
+        public void Reset() { }
+        public void Generate(int goalX, int goalY, CostField costField) { }
+        public ushort GetValue(int x, int y) => 0;
+    }
+
+    /// <summary>
+    /// Vector gradient flow field for massive O(1) crowd steering with bilinear smoothing.
+    /// </summary>
+    public sealed class FlowField
+    {
+        public int Width { get; }
+        public int Height { get; }
+        public float CellSize { get; }
+        public ReadOnlySpan<Microsoft.Xna.Framework.Vector2> RawVectors => null;
+
+        public FlowField(int width, int height, float cellSize) { }
+        public void Reset() { }
+        public void Generate(IntegrationField integrationField, CostField costField) { }
+        public Microsoft.Xna.Framework.Vector2 SampleDirection(Microsoft.Xna.Framework.Vector2 worldPos) => Microsoft.Xna.Framework.Vector2.Zero;
+    }
+
+    /// <summary>
+    /// Manages an LRU pool of flow fields for multiple active tactical targets.
+    /// </summary>
+    public sealed class FlowFieldManager
+    {
+        public FlowFieldManager(CostField costField, int poolCapacity = 16) { }
+        public void StepFrame() { }
+        public int RequestFlowField(Microsoft.Xna.Framework.Point goalCell) => 0;
+        public FlowField GetField(int fieldId) => null!;
+    }
+}
+
+namespace MonoGameMaker.Runtime.Vision
+{
+    /// <summary>
+    /// Formal 3-state cellular automaton for tactical Fog of War.
+    /// </summary>
+    public enum FogState : byte
+    {
+        Unexplored = 0,
+        Explored = 128,
+        Visible = 255
+    }
+
+    /// <summary>
+    /// Decoupled 15-20Hz Line-of-Sight fog of war grid with dynamic Alpha8 texture generation and Hermite shader post-processing.
+    /// </summary>
+    public sealed class FogOfWarSystem : IDisposable
+    {
+        public int GridWidth { get; }
+        public int GridHeight { get; }
+        public float CellSize { get; }
+        public Microsoft.Xna.Framework.Graphics.Texture2D? FogTexture => null;
+        public ReadOnlySpan<byte> ExploredBuffer => null;
+        public ReadOnlySpan<byte> VisibleBuffer => null;
+        public ReadOnlySpan<byte> UploadBuffer => null;
+
+        public FogOfWarSystem(Microsoft.Xna.Framework.Graphics.GraphicsDevice? graphicsDevice, int gridWidth, int gridHeight, float cellSize, float tickRateHz = 15f) { }
+        public void Reset() { }
+        public bool ShouldTickVision(float deltaTime) => false;
+        public void BeginVisionPass() { }
+        public void RevealCircle(Microsoft.Xna.Framework.Vector2 worldPos, float radiusWorld) { }
+        public void EndVisionPass() { }
+        public FogState GetVisibilityAt(Microsoft.Xna.Framework.Vector2 worldPos) => FogState.Unexplored;
+        public void Dispose() { }
+    }
+}
+
+namespace MonoGameMaker.Runtime.Selection
+{
+    public enum UnitTacticalRole : byte
+    {
+        Combat = 0,
+        Worker = 1
+    }
+
+    public enum UnitCommandType : byte
+    {
+        Move,
+        AttackMove,
+        HoldPosition,
+        Stop,
+        AttackTarget
+    }
+
+    public readonly struct UnitCommand
+    {
+        public UnitCommandType Type { get; }
+        public Microsoft.Xna.Framework.Vector2 TargetPosition { get; }
+        public int TargetEntityId { get; }
+
+        public UnitCommand(UnitCommandType type, Microsoft.Xna.Framework.Vector2 targetPos, int targetEntityId = -1)
+        {
+            Type = type;
+            TargetPosition = targetPos;
+            TargetEntityId = targetEntityId;
+        }
+    }
+
+    /// <summary>
+    /// Tactical unit selection controller with ResolutionManager integration, camera unprojection, and military prioritization.
+    /// </summary>
+    public sealed class RTSSelectionManager
+    {
+        public ReadOnlySpan<int> SelectedEntities => null;
+        public int SelectedCount => 0;
+
+        public RTSSelectionManager(MonoGameMaker.Runtime.Spatial.SpatialHashGrid spatialGrid, int maxSelection = 512) { }
+        public void ClearSelection() { }
+        public void SelectBox(
+            Microsoft.Xna.Framework.Vector2 screenStart,
+            Microsoft.Xna.Framework.Vector2 screenEnd,
+            Microsoft.Xna.Framework.Matrix cameraTransform,
+            ReadOnlySpan<byte> factions,
+            ReadOnlySpan<UnitTacticalRole> roles,
+            byte playerFaction,
+            bool isAdditive) { }
+        public void SelectPoint(
+            Microsoft.Xna.Framework.Vector2 screenPoint,
+            Microsoft.Xna.Framework.Matrix cameraTransform,
+            ReadOnlySpan<byte> factions,
+            ReadOnlySpan<UnitTacticalRole> roles,
+            byte playerFaction,
+            bool isAdditive,
+            float pickRadius = 8f) { }
+        public void IssueCommand(UnitCommand command, Action<int, UnitCommand> commandDispatcher) { }
+    }
+
+    /// <summary>
+    /// Tactical control group coordinator (Ctrl+1..9) with double-tap camera jump detection.
+    /// </summary>
+    public sealed class ControlGroupManager
+    {
+        public ControlGroupManager(int maxUnitsPerGroup = 256) { }
+        public void AssignGroup(int slot, ReadOnlySpan<int> entities) { }
+        public void AddToGroup(int slot, ReadOnlySpan<int> entities) { }
+        public bool SelectGroup(int slot, float currentTime, out ReadOnlySpan<int> entities, out bool doubleTapJump)
+        {
+            entities = ReadOnlySpan<int>.Empty;
+            doubleTapJump = false;
+            return false;
+        }
+        public bool SelectGroup(int slot, float currentTime, Func<int, bool>? isAlivePredicate, out ReadOnlySpan<int> entities, out bool doubleTapJump)
+        {
+            entities = ReadOnlySpan<int>.Empty;
+            doubleTapJump = false;
+            return false;
+        }
+        public bool SelectGroup(int slot, float currentTime, Func<int, bool>? isAlivePredicate, out ReadOnlySpan<int> entities, out bool doubleTapJump, ReadOnlySpan<Microsoft.Xna.Framework.Vector2> positions, out Microsoft.Xna.Framework.Vector2 centroid)
+        {
+            entities = ReadOnlySpan<int>.Empty;
+            doubleTapJump = false;
+            centroid = Microsoft.Xna.Framework.Vector2.Zero;
+            return false;
+        }
+        public void PruneDeadInSlot(int slot, Func<int, bool> isAlive) { }
+        public void PruneDead(Func<int, bool> isAlive) { }
+        public static Microsoft.Xna.Framework.Vector2 CalculateCentroid(ReadOnlySpan<int> entities, ReadOnlySpan<Microsoft.Xna.Framework.Vector2> positions) => Microsoft.Xna.Framework.Vector2.Zero;
+    }
+
+    /// <summary>
+    /// Static ring-buffer command queue for sequential RTS order dispatching without Heap allocations.
+    /// </summary>
+    public sealed class UnitCommandQueue
+    {
+        public int Count => 0;
+        public bool IsEmpty => true;
+        public UnitCommandQueue(int capacity = 32) { }
+        public void Enqueue(UnitCommand command, bool queueOrder = false) { }
+        public bool TryPeek(out UnitCommand command) { command = default; return false; }
+        public bool TryDequeue(out UnitCommand command) { command = default; return false; }
+        public void Clear() { }
+    }
+}
+
+namespace MonoGameMaker.Runtime.Graphics3D
+{
+    /// <summary>
+    /// 64-byte sequential vertex data structure for GPU instanced rendering of RTS units.
+    /// </summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
+    public struct UnitInstanceData : Microsoft.Xna.Framework.Graphics.IVertexType
+    {
+        public Microsoft.Xna.Framework.Vector4 TransformData;
+        public Microsoft.Xna.Framework.Vector4 AtlasUVRect;
+        public Microsoft.Xna.Framework.Vector4 TeamColor;
+        public Microsoft.Xna.Framework.Vector4 VisualFlags;
+
+        public static readonly Microsoft.Xna.Framework.Graphics.VertexDeclaration VertexDeclaration = null!;
+        Microsoft.Xna.Framework.Graphics.VertexDeclaration Microsoft.Xna.Framework.Graphics.IVertexType.VertexDeclaration => VertexDeclaration;
+    }
+
+    /// <summary>
+    /// High-performance GPU instanced mesh renderer drawing 500-1000 units in a single Draw Call via DrawInstancedPrimitives.
+    /// </summary>
+    public sealed class InstancedUnitRenderer : IDisposable
+    {
+        public InstancedUnitRenderer(Microsoft.Xna.Framework.Graphics.GraphicsDevice? graphicsDevice) { }
+        public void BeginBatch() { }
+        public void Submit(Microsoft.Xna.Framework.Vector2 worldPos, float rotation, float scale, Microsoft.Xna.Framework.Vector4 atlasUV, Microsoft.Xna.Framework.Color teamColor, bool isSelected, float healthRatio) { }
+        public void Render(Microsoft.Xna.Framework.Graphics.Effect instancingEffect, Microsoft.Xna.Framework.Matrix viewProjection) { }
+        public void Dispose() { }
+    }
+}
+
+namespace MonoGameMaker.Runtime.Simulation
+{
+    /// <summary>
+    /// 48-byte cache-aligned unmanaged physics data for massive RTS crowd simulation.
+    /// </summary>
+    [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]
+    public struct RtsUnitPhysicsData
+    {
+        public Microsoft.Xna.Framework.Vector2 Position;
+        public Microsoft.Xna.Framework.Vector2 Velocity;
+        public float Rotation;
+        public float Radius;
+        public float MaxSpeed;
+        public float MaxForce;
+        public float Mass;
+        public float TurnSpeed;
+        public int FlowFieldId;
+        public byte IsActive;
+        public byte TeamId;
+    }
+
+    /// <summary>
+    /// Core algorithms for RTS Reynolds soft repulsion (1/d^2) and hard push constraint relaxation.
+    /// </summary>
+    public static class RtsPhysics
+    {
+        public const float EpsilonAntiSingularity = 0.001f;
+        public static Microsoft.Xna.Framework.Vector2 CalculateReynoldsRepulsion(Microsoft.Xna.Framework.Vector2 posA, Microsoft.Xna.Framework.Vector2 posB, float weight = 45.0f, float epsilon = EpsilonAntiSingularity) => Microsoft.Xna.Framework.Vector2.Zero;
+        public static bool ResolveHardPush(ref Microsoft.Xna.Framework.Vector2 posA, ref Microsoft.Xna.Framework.Vector2 posB, float radiusA, float radiusB, int idA = 0, int idB = 1) => false;
+        public static void RelaxHardPushBatch(Span<Microsoft.Xna.Framework.Vector2> positions, ReadOnlySpan<float> radii, int iterations = 10) { }
+    }
+
+    /// <summary>
+    /// Massive Zero-GC RTS flocking, steering, and hard push simulation orchestrator.
+    /// </summary>
+    public sealed class RtsSimulationSystem
+    {
+        public int MaxUnits => 0;
+        public MonoGameMaker.Runtime.Spatial.SpatialHashGrid SpatialGrid => null!;
+        public ReadOnlySpan<RtsUnitPhysicsData> Units => null;
+        public RtsSimulationSystem(int maxUnits, int worldWidth, int worldHeight, float cellSize = 32f) { }
+        public void SetUnit(int id, in RtsUnitPhysicsData data) { }
+        public ref RtsUnitPhysicsData GetUnitRef(int id) => ref System.Runtime.CompilerServices.Unsafe.NullRef<RtsUnitPhysicsData>();
+        public Microsoft.Xna.Framework.Vector2 GetUnitPosition(int id) => Microsoft.Xna.Framework.Vector2.Zero;
+        public void Update(float deltaTime, MonoGameMaker.Runtime.Pathfinding.FlowField? activeFlowField = null) { }
+    }
+}
+
+namespace MonoGameMaker.IDE.Core
+{
+    /// <summary>
+    /// Autonomous project scaffolding and synchronization engine for MonoGameMaker.
+    /// Generates full-featured game templates with native RTS/Combat runtime subsystems, atomic documentation, AI governance rules, and zero-dependency Linux builds.
+    /// </summary>
+    /// <example>
+    /// <code>
+    /// // Scaffolding a complete project
+    /// bool success = await TemplateEngine.ScaffoldProjectAsync("/home/bruno/Projects/MyRtsGame", "MyRtsGame");
+    /// 
+    /// // Synchronizing engine runtime and docs into an existing game
+    /// TemplateEngine.SyncRuntimeFiles("/home/bruno/Projects/MyRtsGame");
+    /// </code>
+    /// </example>
+    public static class TemplateEngine
+    {
+        /// <summary>
+        /// Locates the appropriate dotnet executable path across local and global OS installations.
+        /// </summary>
+        public static string GetDotnetPath() => "dotnet";
+
+        /// <summary>
+        /// Configures ProcessStartInfo environment PATH to ensure dotnet CLI availability.
+        /// </summary>
+        public static void ConfigureDotnetPath(System.Diagnostics.ProcessStartInfo psi) { }
+
+        /// <summary>
+        /// Discovers the engine root directory via environment variables, AppDomain hierarchy, or working directory traversal.
+        /// </summary>
+        public static string? FindEngineRootDirectory() => null;
+
+        /// <summary>
+        /// Recursively copies directory hierarchies with granular file and directory exclusion filters.
+        /// </summary>
+        public static void CopyDirectoryRecursive(string sourceDir, string targetDir, Func<string, bool>? fileFilter = null, Func<string, bool>? dirFilter = null) { }
+
+        /// <summary>
+        /// Scaffolds a complete MonoGame DesktopGL project configured with full runtime modules, atomic docs, AI rules, and sanitized Content.mgcb.
+        /// </summary>
+        public static System.Threading.Tasks.Task<bool> ScaffoldProjectAsync(string targetDirectory, string projectName) => System.Threading.Tasks.Task.FromResult(true);
+
+        /// <summary>
+        /// Synchronizes the latest runtime engine sources, documentation, and agent rules into an existing project.
+        /// </summary>
+        public static void SyncRuntimeFiles(string targetDirectory) { }
+
+        /// <summary>
+        /// Generates the boilerplate C# script template for an EntityBehavior.
+        /// </summary>
+        public static string GenerateDefaultScript(string scriptName) => string.Empty;
+
+        /// <summary>
+        /// Generates starter JSON scene data with default camera and entities.
+        /// </summary>
+        public static string GenerateDefaultSceneJson(string sceneName) => string.Empty;
+    }
+}
+
+

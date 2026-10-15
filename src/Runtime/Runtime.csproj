@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <PackageReference Include="MonoGame.Framework.DesktopGL" Version="3.8.1.303" />
+    <PackageReference Include="NLayer" Version="3.0.0" />
   </ItemGroup>
 
 </Project>

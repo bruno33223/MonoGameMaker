@@ -41,6 +41,16 @@ namespace MonoGameMaker.Runtime.Core
         /// </summary>
         public int Layer { get; set; } = 0;
 
+        /// <summary>
+        /// Instância ativa do comportamento (script) atrelado a esta entidade.
+        /// </summary>
+        public EntityBehavior? Script { get; set; }
+
+        /// <summary>
+        /// Dicionário de propriedades configuradas via Prefab/Cena.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<string, string> Properties { get; set; } = new System.Collections.Generic.Dictionary<string, string>();
+
         public GameEntity()
         {
             Id = Guid.NewGuid();

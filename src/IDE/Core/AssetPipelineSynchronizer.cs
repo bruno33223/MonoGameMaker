@@ -142,7 +142,8 @@ namespace MonoGameMaker.IDE.Core
                     {
                         try
                         {
-                            var textRendererType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.TextRenderer");
+                            var textRendererType = AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.Typography.TextRenderer")
+                                ?? AssemblyReloader.LoadedAssembly?.GetType("MonoGameMaker.Runtime.TextRenderer");
                             if (textRendererType != null)
                             {
                                 var clearMethod = textRendererType.GetMethod("ClearCache", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);

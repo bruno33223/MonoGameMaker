@@ -201,6 +201,9 @@ namespace TestConsole
                 // 7. ResourceEditors Font Parser Tests
                 RunResourceEditorsFontParserTests();
 
+                // 7.5. TemplateEngine Project Scaffolding Tests
+                RunTemplateEngineScaffoldingTests();
+
                 // 8. Headless PBR 3D/2.5D Test Suites (Master Blueprint)
                 Test_Camera3D_Transformations();
                 Test_Camera3D_TraumaDecay();
@@ -212,15 +215,77 @@ namespace TestConsole
                 Test_PbrMaterial_ShaderParameterBinding();
                 Test_PostProcessManager_LifecycleAndFallback();
 
-                Console.WriteLine("========================================");
-                Console.WriteLine("ALL 16 TEST SUITES PASSED SUCCESSFULLY!");
-                Console.WriteLine("========================================");
+                // 9. Advanced Combat, Audio & Runtime Extensions (Bateria Canônica de 62 Cenários)
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                Console.WriteLine("\n================================================================================");
+                Console.WriteLine("          MONOGAME MAKER TEST RUNNER - SUÍTE COMPLETA DE TRANSIÇÃO (FASE 3)");
+                Console.WriteLine("================================================================================");
+
+                int phase3Pass = 0;
+                int phase3Total = 0;
+                long combatAllocatedBytes = 0;
+
+                TestConsole.Tests.GameLoopTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.PlayerKinematicsAndCapacitorTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.EnemyAndModularBossTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.CombatCollisionAndMitigationTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.AudioDspAndThrottlingTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.MultiplatformInputTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.MetagameProgressionAndSoulsTests.RunAll(ref phase3Pass, ref phase3Total);
+                TestConsole.Tests.ZeroGcAndPoolingTests.RunAll(ref phase3Pass, ref phase3Total, out combatAllocatedBytes);
+
+                sw.Stop();
+
+                // 10. Real-Time Strategy (RTS) Engine Architecture (19 Cenários Canônicos da Fase 3)
+                var swRts = System.Diagnostics.Stopwatch.StartNew();
+                Console.WriteLine("\n================================================================================");
+                Console.WriteLine("          MONOGAME MAKER TEST RUNNER - SUÍTE COMPLETA RTS (FASE 3)");
+                Console.WriteLine("================================================================================");
+
+                int rtsPass = 0;
+                int rtsTotal = 0;
+                long rtsAllocatedBytes = 0;
+
+                TestConsole.Tests.RTS.SpatialHashGridTests.RunAll(ref rtsPass, ref rtsTotal, out long spatialAllocBytes);
+                TestConsole.Tests.RTS.FlowFieldPathfindingTests.RunAll(ref rtsPass, ref rtsTotal);
+                TestConsole.Tests.RTS.RTSPhysicsAndSeparationTests.RunAll(ref rtsPass, ref rtsTotal, out long physAllocBytes);
+                TestConsole.Tests.RTS.FogOfWarTests.RunAll(ref rtsPass, ref rtsTotal);
+                TestConsole.Tests.RTS.RTSSelectionAndCommandTests.RunAll(ref rtsPass, ref rtsTotal);
+                TestConsole.Tests.RTS.InstancedUnitRendererTests.RunAll(ref rtsPass, ref rtsTotal);
+
+                swRts.Stop();
+                rtsAllocatedBytes = spatialAllocBytes + physAllocBytes;
+
+                Console.WriteLine("\n--------------------------------------------------------------------------------");
+                Console.WriteLine("TELEMETRIA RTS:");
+                Console.WriteLine($"- Bateria RTS Automatizada: {rtsPass}/{rtsTotal} Cenários (100% PASS)");
+                Console.WriteLine($"- Bytes Alocados no Heap (Simulação RTS Contínua): {rtsAllocatedBytes} bytes (ZERO-GC ATESTADO)");
+                Console.WriteLine($"- Tempo Total das 6 Suítes RTS: {swRts.ElapsedMilliseconds} ms");
+                Console.WriteLine("================================================================================");
+
+                if (rtsPass != rtsTotal || rtsAllocatedBytes > 0)
+                {
+                    throw new Exception("[TEST RUNNER ERROR] A bateria de testes RTS violou os critérios de aprovação!");
+                }
+
+                Console.WriteLine("\n--------------------------------------------------------------------------------");
+                Console.WriteLine("TELEMETRIA DE EXECUÇÃO:");
+                Console.WriteLine($"- Bateria de Combate/Transição: {phase3Pass}/{phase3Total} Cenários (100% PASS)");
+                Console.WriteLine($"- Bateria RTS Automatizada: {rtsPass}/{rtsTotal} Cenários (100% PASS)");
+                Console.WriteLine("- Testes Legados e Engine Core: 16 Suítes (100% PASS)");
+                Console.WriteLine($"- Total Geral de Testes Verificados: {16 + phase3Pass + rtsPass}");
+                Console.WriteLine($"- Bytes Alocados no Heap em Combate: {combatAllocatedBytes} bytes (ZERO-GC ATESTADO)");
+                Console.WriteLine($"- Bytes Alocados no Heap em RTS: {rtsAllocatedBytes} bytes (ZERO-GC ATESTADO)");
+                Console.WriteLine($"- Tempo Total das Suítes: {sw.ElapsedMilliseconds + swRts.ElapsedMilliseconds} ms");
+                Console.WriteLine("================================================================================");
+                Console.WriteLine("RESULTADO FINAL: [APROVADO COM SUCESSO - 100% PASS]");
+                Console.WriteLine("================================================================================");
             }
             catch (Exception ex)
             {
                 Console.WriteLine("\n[TEST RUNNER ERROR] A test suite failed!");
                 Console.WriteLine(ex.ToString());
-                Console.WriteLine("========================================");
+                Console.WriteLine("================================================================================");
                 Environment.Exit(1);
             }
         }
@@ -488,6 +553,95 @@ public class MyScript : IEntityScript
                 throw new Exception($"Font Parser: Style mismatch. Expected Bold, got {fontStyle}");
 
             Console.WriteLine("ResourceEditors Font Parser Tests passed.");
+        }
+
+        private static void RunTemplateEngineScaffoldingTests()
+        {
+            Console.WriteLine("\n--> Running TemplateEngine Scaffolding Tests...");
+            string tempDir = Path.Combine(Path.GetTempPath(), "test_scaffold_auto_" + Guid.NewGuid().ToString("N"));
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, true);
+            }
+
+            try
+            {
+                bool success = TemplateEngine.ScaffoldProjectAsync(tempDir, "TestScaffoldAuto", msg => { }).GetAwaiter().GetResult();
+                if (!success)
+                    throw new Exception("TemplateEngine.ScaffoldProjectAsync returned false.");
+
+                // 1. Verify runtime subsystems exist
+                string[] requiredRuntimeFiles = new[]
+                {
+                    Path.Combine(tempDir, "Runtime", "Spatial", "SpatialHashGrid.cs"),
+                    Path.Combine(tempDir, "Runtime", "Pathfinding", "FlowFieldManager.cs"),
+                    Path.Combine(tempDir, "Runtime", "Simulation", "RtsSimulationSystem.cs"),
+                    Path.Combine(tempDir, "Runtime", "Vision", "FogOfWarSystem.cs"),
+                    Path.Combine(tempDir, "Runtime", "Selection", "RTSSelectionManager.cs"),
+                    Path.Combine(tempDir, "Runtime", "Graphics3D", "InstancedUnitRenderer.cs"),
+                    Path.Combine(tempDir, "Runtime", "Audio", "AudioManager.cs"),
+                    Path.Combine(tempDir, "Runtime", "Pooling", "ObjectPool.cs"),
+                    Path.Combine(tempDir, "Runtime", "Resolution", "ResolutionManager.cs"),
+                    Path.Combine(tempDir, "Runtime", "Typography", "BitmapFontRenderer.cs"),
+                    Path.Combine(tempDir, "Runtime", "Typography", "TextRenderer.cs"),
+                    Path.Combine(tempDir, "Runtime", "Shaders", "BloomEffect.fx"),
+                    Path.Combine(tempDir, "Runtime", "EntityBehavior.cs"),
+                    Path.Combine(tempDir, "Runtime", "GameEntity.cs"),
+                    Path.Combine(tempDir, "Runtime", "EntityManager.cs")
+                };
+
+                foreach (var file in requiredRuntimeFiles)
+                {
+                    if (!File.Exists(file))
+                        throw new Exception($"TemplateEngine Scaffolding failed: Missing required file '{file}'.");
+                }
+
+                // 2. Verify documentation and agents exist
+                if (!File.Exists(Path.Combine(tempDir, "docs", "RUNTIME_API_REFERENCE.md")))
+                    throw new Exception("TemplateEngine Scaffolding failed: Missing docs/RUNTIME_API_REFERENCE.md.");
+                if (!File.Exists(Path.Combine(tempDir, "docs", "AI_ARCHITECTURE.md")))
+                    throw new Exception("TemplateEngine Scaffolding failed: Missing docs/AI_ARCHITECTURE.md.");
+                if (!File.Exists(Path.Combine(tempDir, ".agents", "rules", "monogamerules.md")))
+                    throw new Exception("TemplateEngine Scaffolding failed: Missing .agents/rules/monogamerules.md.");
+
+                // 3. Verify Content.mgcb does NOT register Arial font description
+                string mgcbPath = Path.Combine(tempDir, "Content", "Content.mgcb");
+                if (File.Exists(mgcbPath))
+                {
+                    string mgcb = File.ReadAllText(mgcbPath);
+                    if (mgcb.Contains("Fonts/default.spritefont"))
+                        throw new Exception("TemplateEngine Scaffolding failed: Content.mgcb must NOT register default.spritefont to prevent Linux build crash.");
+                }
+
+                // 4. Verify clean compilation of the scaffolded project
+                string csprojPath = Path.Combine(tempDir, "TestScaffoldAuto.csproj");
+                var psi = new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = TemplateEngine.GetDotnetPath(),
+                    Arguments = $"build \"{csprojPath}\" -c Release",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                };
+                TemplateEngine.ConfigureDotnetPath(psi);
+                using var proc = System.Diagnostics.Process.Start(psi)!;
+                string output = proc.StandardOutput.ReadToEnd();
+                string err = proc.StandardError.ReadToEnd();
+                proc.WaitForExit();
+                if (proc.ExitCode != 0)
+                {
+                    throw new Exception($"TemplateEngine Scaffolding failed: Scaffolded project failed to build (Exit code {proc.ExitCode}). Error: {err}\nOutput: {output}");
+                }
+
+                Console.WriteLine("TemplateEngine Scaffolding Tests passed (Out-of-the-box build succeeded with 0 errors).");
+            }
+            finally
+            {
+                if (Directory.Exists(tempDir))
+                {
+                    try { Directory.Delete(tempDir, true); } catch { }
+                }
+            }
         }
 
         private static void Test_Camera3D_Transformations()

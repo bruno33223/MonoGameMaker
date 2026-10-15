@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -29,6 +30,69 @@ namespace MonoGameMaker.IDE.Core
                 string currentPath = Environment.GetEnvironmentVariable("PATH") ?? "";
                 string newPath = dotnetDir + Path.PathSeparator + currentPath;
                 psi.EnvironmentVariables["PATH"] = newPath;
+            }
+        }
+
+        public static string? FindEngineRootDirectory()
+        {
+            string? envPath = Environment.GetEnvironmentVariable("MONOGAMEMAKER_ROOT");
+            if (!string.IsNullOrEmpty(envPath) && Directory.Exists(envPath) && Directory.Exists(Path.Combine(envPath, "src", "Runtime")))
+            {
+                return envPath;
+            }
+
+            string? current = AppDomain.CurrentDomain.BaseDirectory;
+            while (!string.IsNullOrEmpty(current))
+            {
+                if (Directory.Exists(Path.Combine(current, "src", "Runtime")) &&
+                    Directory.Exists(Path.Combine(current, "docs")))
+                {
+                    return current;
+                }
+                current = Directory.GetParent(current)?.FullName;
+            }
+
+            current = Directory.GetCurrentDirectory();
+            while (!string.IsNullOrEmpty(current))
+            {
+                if (Directory.Exists(Path.Combine(current, "src", "Runtime")) &&
+                    Directory.Exists(Path.Combine(current, "docs")))
+                {
+                    return current;
+                }
+                current = Directory.GetParent(current)?.FullName;
+            }
+
+            string defaultDevPath = "/home/bruno/Projects/MonoGameMaker";
+            if (Directory.Exists(defaultDevPath) && Directory.Exists(Path.Combine(defaultDevPath, "src", "Runtime")))
+            {
+                return defaultDevPath;
+            }
+
+            return null;
+        }
+
+        public static void CopyDirectoryRecursive(string sourceDir, string targetDir, HashSet<string>? excludeNames = null)
+        {
+            if (!Directory.Exists(sourceDir)) return;
+            Directory.CreateDirectory(targetDir);
+
+            foreach (string file in Directory.GetFiles(sourceDir))
+            {
+                string fileName = Path.GetFileName(file);
+                if (excludeNames != null && excludeNames.Contains(fileName)) continue;
+
+                string destFile = Path.Combine(targetDir, fileName);
+                File.Copy(file, destFile, true);
+            }
+
+            foreach (string subDir in Directory.GetDirectories(sourceDir))
+            {
+                string dirName = Path.GetFileName(subDir);
+                if (excludeNames != null && excludeNames.Contains(dirName)) continue;
+
+                string destSubDir = Path.Combine(targetDir, dirName);
+                CopyDirectoryRecursive(subDir, destSubDir, excludeNames);
             }
         }
 
@@ -83,8 +147,11 @@ namespace MonoGameMaker.IDE.Core
 
                 // 3. Edit csproj:
                 // - Change TargetFramework to net8.0
-                // - Add CopyToOutputDirectory directives for Scenes and Prefabs
-                logCallback("Updating csproj configuration for target framework, scenes, and prefabs...");
+                // - Add AllowUnsafeBlocks and Nullable
+                // - Add PackageReferences (ImGui.NET, NLayer)
+                // - Add CopyToOutputDirectory directives for Scenes, Prefabs, and Shaders
+                // - Exclude Runtime/Docs from compilation (Doc-as-Code stubs)
+                logCallback("Updating csproj configuration for framework, packages, scenes, prefabs, and shaders...");
                 string csprojContent = File.ReadAllText(csprojPath);
                 
                 csprojContent = Regex.Replace(csprojContent, @"<TargetFramework>.*?</TargetFramework>", "<TargetFramework>net8.0</TargetFramework>");
@@ -99,12 +166,20 @@ namespace MonoGameMaker.IDE.Core
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include=""ImGui.NET"" Version=""1.91.6.1"" />
+    <PackageReference Include=""NLayer"" Version=""3.0.0"" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove=""Runtime\Docs\**"" />
+    <None Include=""Runtime\Docs\**"" />
   </ItemGroup>
   <ItemGroup>
     <None Update=""Content\Scenes\**\*.*"">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Update=""Prefabs\**\*.*"">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update=""Runtime\Shaders\**\*.*"">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -131,28 +206,9 @@ namespace MonoGameMaker.IDE.Core
                 Directory.CreateDirectory(scriptsPath);
                 Directory.CreateDirectory(prefabsPath);
 
-                // Create default font file
+                // Create default font description template file (without registering in Content.mgcb to prevent Linux build crash)
                 string defaultFontPath = Path.Combine(fontsPath, "default.spritefont");
                 File.WriteAllText(defaultFontPath, GetDefaultSpriteFontCode());
-
-                // Register the default font in Content.mgcb
-                string mgcbPath = Path.Combine(contentPath, "Content.mgcb");
-                if (File.Exists(mgcbPath))
-                {
-                    string mgcbContent = File.ReadAllText(mgcbPath);
-                    if (!mgcbContent.Contains("Fonts/default.spritefont"))
-                    {
-                        var sb = new System.Text.StringBuilder();
-                        sb.AppendLine();
-                        sb.AppendLine("#begin Fonts/default.spritefont");
-                        sb.AppendLine("/importer:FontDescriptionImporter");
-                        sb.AppendLine("/processor:FontDescriptionProcessor");
-                        sb.AppendLine("/build:Fonts/default.spritefont");
-                        sb.AppendLine("#end Fonts/default.spritefont");
-                        sb.AppendLine();
-                        File.WriteAllText(mgcbPath, mgcbContent + sb.ToString());
-                    }
-                }
 
                 // 5. Create default scene_init.json
                 string sceneInitPath = Path.Combine(scenesPath, "scene_init.json");
@@ -161,11 +217,48 @@ namespace MonoGameMaker.IDE.Core
                     File.WriteAllText(sceneInitPath, "{\n  \"Width\": 1280,\n  \"Height\": 720,\n  \"BackgroundColor\": {\n    \"X\": 0.1,\n    \"Y\": 0.1,\n    \"Z\": 0.2\n  },\n  \"BackgroundImage\": \"\",\n  \"Instances\": []\n}");
                 }
 
-                // 6. Inject Runtime folders and files
-                logCallback("Injecting SceneLoader and runtime scripts...");
+                // 6. Discover engine root and copy runtime subsystems, docs, and agent rules
+                logCallback("Discovering engine root directory...");
+                string? engineRoot = FindEngineRootDirectory();
                 string runtimeDir = Path.Combine(targetDirectory, "Runtime");
                 Directory.CreateDirectory(runtimeDir);
 
+                if (!string.IsNullOrEmpty(engineRoot))
+                {
+                    string srcRuntime = Path.Combine(engineRoot, "src", "Runtime");
+                    if (Directory.Exists(srcRuntime))
+                    {
+                        logCallback($"Copying engine runtime modules and shaders from '{srcRuntime}'...");
+                        var exclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            "bin", "obj", "Runtime.csproj", "EntityBehavior.cs", "GameEntity.cs", "EntityManager.cs"
+                        };
+                        CopyDirectoryRecursive(srcRuntime, runtimeDir, exclude);
+                    }
+
+                    string docsDir = Path.Combine(engineRoot, "docs");
+                    if (Directory.Exists(docsDir))
+                    {
+                        logCallback($"Copying atomic documentation from '{docsDir}'...");
+                        string targetDocs = Path.Combine(targetDirectory, "docs");
+                        CopyDirectoryRecursive(docsDir, targetDocs);
+                    }
+
+                    string agentsDir = Path.Combine(engineRoot, ".agents");
+                    if (Directory.Exists(agentsDir))
+                    {
+                        logCallback($"Copying AI agent rules from '{agentsDir}'...");
+                        string targetAgents = Path.Combine(targetDirectory, ".agents");
+                        CopyDirectoryRecursive(agentsDir, targetAgents);
+                    }
+                }
+                else
+                {
+                    logCallback("Warning: Engine root directory could not be resolved automatically.");
+                }
+
+                // 6.5. Inject core runtime scripts
+                logCallback("Injecting core runtime engine scripts...");
                 string entityBehaviorPath = Path.Combine(runtimeDir, "EntityBehavior.cs");
                 File.WriteAllText(entityBehaviorPath, GetEntityBehaviorCode());
 
@@ -189,9 +282,6 @@ namespace MonoGameMaker.IDE.Core
 
                 string camera2DPath = Path.Combine(runtimeDir, "Camera2D.cs");
                 File.WriteAllText(camera2DPath, GetCamera2DCode());
-
-                string textRendererPath = Path.Combine(runtimeDir, "TextRenderer.cs");
-                File.WriteAllText(textRendererPath, GetTextRendererCode());
 
                 string imguiRendererPath = Path.Combine(runtimeDir, "ImGuiRenderer.cs");
                 File.WriteAllText(imguiRendererPath, GetImGuiRendererCode());
@@ -256,8 +346,8 @@ namespace MonoGameMaker.Runtime
 {
     public abstract class EntityBehavior : IDisposable
     {
-        public GameEntity Entity { get; internal set; }
-        public Dictionary<string, string> Properties { get; internal set; }
+        public GameEntity Entity { get; internal set; } = null!;
+        public Dictionary<string, string> Properties { get; internal set; } = new Dictionary<string, string>();
 
         public virtual void Awake() { }
         public virtual void Update(GameTime gameTime) { }
@@ -299,15 +389,34 @@ namespace MonoGameMaker.Runtime
         }
 
         public string PrefabName { get; set; } = string.Empty;
-        public Texture2D Texture { get; set; }
+        public Texture2D? Texture { get; set; }
         public Vector2 Position { get; set; }
-        public EntityBehavior Script { get; set; }
+        public Vector2 Velocity { get; set; } = Vector2.Zero;
+        public Vector2 Size { get; set; } = Vector2.Zero;
+        public float Rotation { get; set; } = 0f;
+        public float HeadingOffset { get; set; } = 0f;
+        public bool IsDead { get => IsDestroyed; set => IsDestroyed = value; }
+        public bool Active { get; set; } = true;
+        public int Layer { get; set; } = 0;
+        public EntityBehavior? Script { get; set; }
         public string Tag { get; set; } = ""Default"";
         public bool IsDestroyed { get; set; } = false;
+        public System.Collections.Generic.Dictionary<string, string> Properties { get; set; } = new System.Collections.Generic.Dictionary<string, string>();
         
         public Rectangle? SourceRect { get; set; } = null;
         public Vector2 HitboxOffset { get; set; } = Vector2.Zero;
         public Vector2 HitboxSize { get; set; } = Vector2.Zero;
+
+        public virtual void Destroy()
+        {
+            if (IsDestroyed) return;
+            IsDestroyed = true;
+            OnDestroyed();
+        }
+
+        public virtual void OnDestroyed() { }
+        public virtual void Update(GameTime gameTime) { }
+        public virtual void Draw(SpriteBatch spriteBatch) { }
 
         private int _animFrameWidth;
         private int _animFrameHeight;
@@ -1279,6 +1388,7 @@ using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System.IO;
 using MonoGameMaker.Runtime;
+using MonoGameMaker.Runtime.Typography;
 
 namespace {projectName}
 {{
@@ -1410,11 +1520,12 @@ namespace {projectName}
 
         public static string GetNewScriptTemplate(string projectName, string className)
         {
-            return $@"// Referência de API: consulte src/Runtime/Docs/RUNTIME_SUMMARY.cs para exemplos de uso.
+            return $@"// Referência de API: consulte docs/RUNTIME_API_REFERENCE.md e src/Runtime/Docs/RUNTIME_SUMMARY.cs para exemplos de uso.
 using System;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using MonoGameMaker.Runtime;
+using MonoGameMaker.Runtime.Typography;
 
 namespace {projectName}.Scripts
 {{
@@ -1464,6 +1575,34 @@ namespace {projectName}.Scripts
                     Directory.CreateDirectory(runtimeDir);
                 }
 
+                string? engineRoot = FindEngineRootDirectory();
+                if (!string.IsNullOrEmpty(engineRoot))
+                {
+                    string srcRuntime = Path.Combine(engineRoot, "src", "Runtime");
+                    if (Directory.Exists(srcRuntime))
+                    {
+                        var exclude = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                        {
+                            "bin", "obj", "Runtime.csproj", "EntityBehavior.cs", "GameEntity.cs", "EntityManager.cs"
+                        };
+                        CopyDirectoryRecursive(srcRuntime, runtimeDir, exclude);
+                    }
+
+                    string docsDir = Path.Combine(engineRoot, "docs");
+                    if (Directory.Exists(docsDir))
+                    {
+                        string targetDocs = Path.Combine(targetDirectory, "docs");
+                        CopyDirectoryRecursive(docsDir, targetDocs);
+                    }
+
+                    string agentsDir = Path.Combine(engineRoot, ".agents");
+                    if (Directory.Exists(agentsDir))
+                    {
+                        string targetAgents = Path.Combine(targetDirectory, ".agents");
+                        CopyDirectoryRecursive(agentsDir, targetAgents);
+                    }
+                }
+
                 SafeWriteAllText(Path.Combine(runtimeDir, "EntityBehavior.cs"), GetEntityBehaviorCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "GameEntity.cs"), GetGameEntityCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "SharedTypes.cs"), GetSharedTypesCode());
@@ -1472,8 +1611,14 @@ namespace {projectName}.Scripts
                 SafeWriteAllText(Path.Combine(runtimeDir, "GameState.cs"), GetGameStateCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "SceneManager.cs"), GetSceneManagerCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "Camera2D.cs"), GetCamera2DCode());
-                SafeWriteAllText(Path.Combine(runtimeDir, "TextRenderer.cs"), GetTextRendererCode());
                 SafeWriteAllText(Path.Combine(runtimeDir, "ImGuiRenderer.cs"), GetImGuiRendererCode());
+
+                // Remove redundant root TextRenderer.cs if Typography/TextRenderer.cs is present
+                string legacyTextRenderer = Path.Combine(runtimeDir, "TextRenderer.cs");
+                if (File.Exists(legacyTextRenderer) && File.Exists(Path.Combine(runtimeDir, "Typography", "TextRenderer.cs")))
+                {
+                    try { File.Delete(legacyTextRenderer); } catch { }
+                }
             }
             catch (Exception ex)
             {
@@ -2017,18 +2162,34 @@ namespace MonoGameMaker.Runtime
             return $@"# AI Architecture Manifest & Rules - {projectName}
 
 You are an AI assistant helping a developer build gameplay features in this project.
-This project uses MonoGame DesktopGL (.NET 8.0) and is structured as a data-driven engine.
+This project uses MonoGame DesktopGL (.NET 8.0) and is structured as a data-driven engine with high-performance native subsystems.
 You must adhere to the following architecture rules and constraints at all times.
 
 ## Project Context
 - **Framework**: MonoGame DesktopGL (.NET 8.0)
 - **Architecture**: Data-Driven entity prefab system. All entities in scenes are instances of Prefabs.
+- **Reference Docs**: Exhaustive API manuals are in `docs/` and indexed in `docs/RUNTIME_API_REFERENCE.md`.
 
 ## Folder Taxonomy
 - `Content/Textures/`: Holds raw image assets (`.png`, `.jpg`, `.jpeg`). Never place gameplay configuration files here.
 - `Prefabs/`: Holds JSON metadata files (with `.prefab` extension) containing `TextureName` (pointing to textures in Content/Textures), `ScriptName` (pointing to script classes in Scripts folder), and optional `Tag`.
 - `Content/Scenes/`: Holds level/scene JSON layouts (specifically `scene_init.json`), which instance Prefabs by referencing their `prefabName` and specifying their `x` and `y` coordinates.
 - `Scripts/`: Holds pure C# script behavior classes inheriting from `MonoGameMaker.Runtime.EntityBehavior`.
+- `Runtime/`: Core engine runtime subsystems and shaders (Zero-GC pooling, spatial hashing, pathfinding, vision, audio DSP, typography).
+- `docs/`: Exhaustive atomic documentation for all runtime systems.
+- `.agents/rules/`: Agent coding guidelines and DDD requirements.
+
+## Runtime Subsystems (Do NOT Reinvent the Wheel)
+- **Spatial Partitioning**: Use `MonoGameMaker.Runtime.Spatial.SpatialHashGrid` for ultra-fast Zero-GC proximity and box queries.
+- **Pathfinding**: Use `MonoGameMaker.Runtime.Pathfinding.FlowFieldManager` for crowd navigation and dynamic obstacle avoidance.
+- **Flocking & Physics**: Use `MonoGameMaker.Runtime.Simulation.RtsSimulationSystem` and `RtsPhysics` for mass unit separation.
+- **Fog of War**: Use `MonoGameMaker.Runtime.Vision.FogOfWarSystem` for multi-tier explored/visible fog calculation.
+- **Tactical Selection**: Use `MonoGameMaker.Runtime.Selection.RTSSelectionManager` and `ControlGroupManager` for marquee boxes and group hotkeys.
+- **Mass GPU Instancing**: Use `MonoGameMaker.Runtime.Graphics3D.InstancedUnitRenderer` for drawing thousands of animated units in single draw calls.
+- **Audio & DSP**: Use `MonoGameMaker.Runtime.Audio.AudioManager` and `SoundSynthesizer` for math-generated sound effects and throttling.
+- **Object Pooling**: Use `MonoGameMaker.Runtime.Pooling.ObjectPool<T>` with `IPoolable` to prevent GC pauses.
+- **Resolution**: Use `MonoGameMaker.Runtime.Resolution.ResolutionManager` for letterbox/pillarbox virtual 1080p rendering.
+- **Typography**: Use `MonoGameMaker.Runtime.Typography.TextRenderer` (procedural 5x7 font fallback built-in, no external font files needed).
 
 ## Hard Architectural Rules
 1. **NO Game1.cs Modifications**: Never modify `Game1.cs` to add custom gameplay logic or variables. It acts solely as the boilerplate engine bootstrap. All entity lifecycle operations must use `EntityManager`.
